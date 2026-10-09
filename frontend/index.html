@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Sessionary</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <script>
+      try {
+        var t = JSON.parse(localStorage.getItem('sessionary:theme') || '"system"')
+        if (t === 'system') t = matchMedia('(prefers-color-scheme: light)').matches ? 'paper' : 'ember'
+        document.documentElement.dataset.theme = t
+        // set the language before first paint so CJK text starts in the right font
+        var l = JSON.parse(localStorage.getItem('sessionary:lang') || 'null')
+        if (!l) { var n = (navigator.language || 'en').toLowerCase(); l = n.indexOf('ja') === 0 ? 'ja' : /^zh-(hant|tw|hk|mo)/.test(n) ? 'zh-Hant' : n.indexOf('zh') === 0 ? 'zh-Hans' : 'en' }
+        document.documentElement.lang = l
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

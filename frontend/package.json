@@ -1,0 +1,16 @@
+{
+  "name": "sessionary-desktop-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && touch dist/.gitkeep",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.7.0",
+    "mygo-runtime": "0.3.3",
+    "typescript": "5.9.3",
+    "vite": "6.4.3"
+  }
+}
