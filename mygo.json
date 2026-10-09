@@ -1,0 +1,22 @@
+{
+  "name": "Sessionary",
+  "identifier": "dev.sessionary.desktop",
+  "version": "0.1.0",
+  "copyright": "\u00a9 2026 Sessionary",
+  "devUrl": "http://127.0.0.1:5174",
+  "devCommand": "bun run --cwd frontend dev",
+  "buildCommand": "bun run --cwd frontend build && node scripts/build-backend.mjs && node scripts/fetch-node.mjs",
+  "bindings": "frontend/src/mygo.ts",
+  "out": "build",
+  "resources": [
+    ".stage/runtime",
+    ".stage/server"
+  ],
+  "linux": {
+    "comment": "The control center for your AI coding agents",
+    "categories": [
+      "Development"
+    ],
+    "command": "sessionary-desktop"
+  }
+}

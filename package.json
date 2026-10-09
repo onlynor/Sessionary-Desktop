@@ -1,0 +1,9 @@
+{
+  "name": "sessionary-desktop",
+  "private": true,
+  "scripts": {
+    "dev": "go tool mygo dev",
+    "build": "go tool mygo build",
+    "typecheck": "go vet ./... && GOOS=darwin go vet ./... && GOOS=windows go vet ./... && bun run --cwd frontend typecheck"
+  }
+}

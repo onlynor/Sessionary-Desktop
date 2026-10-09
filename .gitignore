@@ -1,0 +1,10 @@
+# builds
+/build/
+/.stage/
+/frontend/dist/*
+!/frontend/dist/.gitkeep
+/.mygo/
+node_modules/
+# development runs and screenshots
+/.run/
+/.shots/
