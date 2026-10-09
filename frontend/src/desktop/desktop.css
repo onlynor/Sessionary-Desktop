@@ -1,0 +1,361 @@
+/* ============================================================================================
+   Sessionary Desktop — the desktop layer over Sessionary's web client
+   ============================================================================================
+   The web client floats its sidebar as a card over a lit canvas, as a web app must to look like an app. A window
+   does not need to pretend: it has edges, a title bar and a system around it. So here:
+
+     window      the sidebar is the window's own source list, flush with its edges, full height
+     title bar   the top 52px of the window: the sidebar's toggle on the left, the page's toolbar on the right;
+                 both move the window; window controls sit inside it where the system puts them
+     toolbar     transparent over the top of a page, a material with a hairline once content scrolls under it
+     canvas      one quiet, flat colour; no ambient gradients
+     surfaces    opaque, hairline-edged groups (System Settings), elevation only where something floats
+     motion      what the client has; nothing added
+
+   Every rule is scoped to html.desktop so that this file is inert in the web build.
+   ============================================================================================ */
+
+/* ---------- tokens ---------- */
+html.desktop {
+  --tb-h: 52px;
+  --gap: 0px;                       /* the sidebar no longer floats */
+  --side-pad: 10px;
+  --row-h: 28px;
+  --dt-radius-group: 12px;
+}
+/* dark: content on near-black, the source list a step lighter, as a sidebar material reads over a dark desktop */
+html.desktop, html.desktop[data-theme="ember"] {
+  --canvas: #1c1c1e;
+  --canvas-glow: none;
+  --bg-main: #1c1c1e;
+  --bg-window: #1c1c1e;
+  --dt-side: #232325;
+  --dt-side-edge: rgb(0 0 0 / 0.55);
+  --dt-side-lip: rgb(255 255 255 / 0.04);
+  --material: #252527;
+  --bg-soft: #252527;
+  --bg-card: #2a2a2c;
+  --elev-1: 0 0 0 0.5px rgb(255 255 255 / 0.075);
+  --elev-2: 0 0 0 0.5px rgb(255 255 255 / 0.1), 0 10px 28px -12px rgb(0 0 0 / 0.7);
+  --hairline: rgb(255 255 255 / 0.07);
+  --dt-toolbar: rgb(28 28 30 / 0.78);
+  --dt-sel: rgb(255 255 255 / 0.1);
+  --dt-sel-strong: rgb(255 255 255 / 0.13);
+  --dt-scroll: rgb(255 255 255 / 0.28);
+}
+html.desktop[data-theme="graphite"] {
+  --canvas: #141415;
+  --bg-main: #141415;
+  --bg-window: #141415;
+  --dt-side: #1b1b1d;
+  --dt-side-edge: rgb(0 0 0 / 0.6);
+  --dt-side-lip: rgb(255 255 255 / 0.035);
+  --material: #1d1d1f;
+  --bg-soft: #1d1d1f;
+  --bg-card: #222224;
+  --elev-1: 0 0 0 0.5px rgb(255 255 255 / 0.065);
+  --hairline: rgb(255 255 255 / 0.065);
+  --dt-toolbar: rgb(20 20 21 / 0.8);
+  --dt-sel: rgb(255 255 255 / 0.09);
+  --dt-sel-strong: rgb(255 255 255 / 0.12);
+}
+/* light: white content, a cool grey source list, groups that are white on a barely-grey page */
+html.desktop[data-theme="paper"] {
+  --canvas: #f6f6f7;
+  --bg-main: #ffffff;
+  --bg-window: #f6f6f7;
+  --dt-side: #ececee;
+  --dt-side-edge: rgb(0 0 0 / 0.09);
+  --dt-side-lip: rgb(255 255 255 / 0.6);
+  --material: #ffffff;
+  --bg-soft: #ffffff;
+  --bg-card: #ffffff;
+  --elev-1: 0 0 0 0.5px rgb(0 0 0 / 0.08), 0 1px 2px rgb(0 0 0 / 0.04);
+  --elev-2: 0 0 0 0.5px rgb(0 0 0 / 0.09), 0 8px 24px -10px rgb(0 0 0 / 0.18);
+  --hairline: rgb(0 0 0 / 0.07);
+  --dt-toolbar: rgb(246 246 247 / 0.8);
+  --dt-sel: rgb(0 0 0 / 0.075);
+  --dt-sel-strong: rgb(0 0 0 / 0.1);
+  --dt-scroll: rgb(0 0 0 / 0.3);
+}
+
+/* ---------- an app, not a document ---------- */
+html.desktop body { background: var(--canvas); }
+/* chrome is not text to select; what is read (conversations, code, values) still is */
+html.desktop .side, html.desktop .page-head, html.desktop .toolbar, html.desktop .workbar, html.desktop .tabs,
+html.desktop button, html.desktop .btn, html.desktop .seg, html.desktop .section-label, html.desktop .sx-head,
+html.desktop .nav, html.desktop .menu, html.desktop .palette-foot, html.desktop .dt-launch { -webkit-user-select: none; user-select: none; }
+html.desktop a, html.desktop img { -webkit-user-drag: none; }
+/* app controls show the arrow; only links to the web are hands */
+html.desktop a { cursor: default; }
+html.desktop .md a, html.desktop a[target="_blank"] { cursor: pointer; }
+
+/* overlay scrollbars: thin, shown while scrolling or hovering the scroller */
+html.desktop ::-webkit-scrollbar { width: 12px; height: 12px; }
+html.desktop ::-webkit-scrollbar-thumb { background: transparent; border: 3.5px solid transparent; border-radius: 10px; background-clip: content-box; transition: background 300ms; }
+html.desktop [data-scrolling]::-webkit-scrollbar-thumb, html.desktop :hover::-webkit-scrollbar-thumb { background-color: var(--dt-scroll); }
+html.desktop ::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--tint) / 0.45); border-width: 2.5px; }
+
+/* ---------- the window ---------- */
+html.desktop .window { background: var(--canvas); }
+html.desktop .side {
+  margin: 0; border-radius: 0;
+  background: var(--dt-side);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: inset -0.5px 0 0 var(--dt-side-edge), inset -1.5px 0 0 var(--dt-side-lip);
+}
+html.desktop .side-full { width: var(--side-w); }
+html.desktop .content { background: var(--bg-main); }
+
+/* ---------- the sidebar: a source list ---------- */
+html.desktop .nav { padding: 0 var(--side-pad) var(--side-pad); gap: 12px; scrollbar-width: none; }
+html.desktop .nav::-webkit-scrollbar { display: none; }
+/* its top is the title bar: room for window controls, the toggle at the trailing end */
+html.desktop .nav-head {
+  position: sticky; top: 0; z-index: 2; flex: none;
+  height: var(--tb-h); margin: 0 calc(var(--side-pad) * -1) -4px;
+  padding: 0 var(--side-pad) 0 max(var(--side-pad), max(var(--mygo-titlebar-inset-left, 0px), var(--dt-ctl-start, 0px)));
+  background: var(--dt-side);
+  --app-region: drag;
+}
+html.desktop .brand-mark, html.desktop .brand-name { display: none; }
+html.desktop .nav-collapse { margin-left: auto; color: var(--text-3); }
+html.desktop .nav-collapse:hover { color: var(--text); }
+
+html.desktop .nav-search { height: 28px; padding: 0 6px 0 8px; border-radius: 7px; gap: 6px; background: rgb(var(--tint) / 0.065); box-shadow: inset 0 0 0 0.5px rgb(var(--tint) / 0.05); color: var(--text-3); }
+html.desktop .nav-search:hover { background: rgb(var(--tint) / 0.09); color: var(--text-2); }
+html.desktop .nav-search kbd { height: 16px; min-width: 0; padding: 0 4px; font-size: 10.5px; background: none; color: var(--text-3); letter-spacing: 0.02em; }
+
+html.desktop .nav-group { gap: 1px; }
+html.desktop .nav-section { padding: 8px 8px 3px; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text-3); }
+html.desktop .nav-i { height: var(--row-h); padding: 0 8px; gap: 8px; border-radius: 7px; font-size: 13px; color: var(--text); }
+html.desktop .nav-i > .icon { color: var(--accent); opacity: 0.95; }
+html.desktop .nav-i:hover { background: rgb(var(--tint) / 0.045); }
+/* selection: a neutral fill, as a source list shows it; the symbol keeps the accent */
+html.desktop .nav-i.on { background: var(--dt-sel); color: var(--text-strong); font-weight: 500; }
+html.desktop .nav-i.on > .icon { color: var(--accent); }
+html.desktop .nav-i.on .meta { color: var(--text-2); }
+html.desktop[data-inactive] .nav-i > .icon { color: var(--text-3); }
+html.desktop .nav-i .meta { font-size: 11.5px; }
+
+/* the machine is a heading with a switcher, not a card inside the list */
+html.desktop .nav-machine { padding: 0; margin: 0; background: none; border-radius: 0; }
+html.desktop .machine-switch { margin: 0 0 2px; padding: 4px 6px 4px 4px; gap: 8px; border-radius: 8px; background: none; box-shadow: none; }
+html.desktop .machine-switch:hover { background: rgb(var(--tint) / 0.045); }
+html.desktop .machine-switch .machine-tile { border-radius: 7px; }
+html.desktop .ms-name { font-size: 13px; font-weight: 600; }
+html.desktop .ms-sub { font-size: 11px; }
+
+html.desktop .nav-foot { padding-top: 6px; box-shadow: 0 -0.5px 0 var(--hairline); }
+html.desktop .nav-status { padding: 6px 8px 0; font-size: 11px; }
+html.desktop .nav-status .dot { width: 6px; height: 6px; }
+
+/* collapsed: a rail of symbols under the title bar */
+html.desktop .window[data-side="collapsed"]:not(.compact) .nav { padding: 0 0 var(--side-pad); }
+html.desktop .window[data-side="collapsed"]:not(.compact) .nav-head { flex-direction: row; justify-content: center; height: var(--tb-h); margin: 0; padding: 0; }
+html.desktop .window[data-side="collapsed"]:not(.compact) .nav-collapse { margin: 0; }
+html.desktop .window[data-side="collapsed"]:not(.compact) .nav-i, html.desktop .window[data-side="collapsed"]:not(.compact) .nav-search { width: 36px; height: 32px; }
+
+/* ---------- the title bar of pages: their toolbar ----------
+   A page's head (its place and its actions) becomes the window's toolbar: pinned to the top, 52px, moving the
+   window, transparent until something scrolls under it. */
+html.desktop .page { overflow-x: hidden; }
+html.desktop .page-inner { padding-top: 0; }
+html.desktop .page-head {
+  position: sticky; top: 0; z-index: 9;
+  height: var(--tb-h); min-height: var(--tb-h); margin: 0 0 6px;
+  padding-right: max(var(--mygo-titlebar-inset-right, 0px), var(--dt-ctl-end, 0px));
+  --app-region: drag;
+  isolation: isolate;
+}
+/* the material spans the document's width, not only the reading column */
+html.desktop .page-head::before {
+  content: ''; position: absolute; z-index: -1; top: 0; bottom: 0; left: -100vw; right: -100vw;
+  background: var(--dt-toolbar);
+  -webkit-backdrop-filter: blur(24px) saturate(170%); backdrop-filter: blur(24px) saturate(170%);
+  box-shadow: 0 0.5px 0 var(--hairline);
+  opacity: 0; transition: opacity 160ms var(--ease-out);
+}
+html.desktop .page[data-scrolled] .page-head::before { opacity: 1; }
+html.desktop .page-head .crumbs { font-size: 13px; }
+html.desktop .page-head .crumb-here { font-weight: 600; }
+/* a page the sidebar already names: its title appears in the toolbar only once the large title has scrolled away */
+html.desktop .page-head .crumbs:not(:has(.crumb-link)) { opacity: 0; transform: translateY(4px); transition: opacity 180ms var(--ease-out), transform 220ms var(--ease); }
+html.desktop .page[data-scrolled-far] .page-head .crumbs:not(:has(.crumb-link)) { opacity: 1; transform: none; }
+html.desktop .page-head .crumbs:not(:has(.crumb-link)) .crumb-item:not(:last-child) { display: none; }
+
+/* toolbar buttons: quieter than buttons in content */
+html.desktop .page-head .btn:not(.primary) { height: 28px; background: rgb(var(--tint) / 0.06); box-shadow: none; }
+html.desktop .page-head .btn:not(.primary):hover { background: rgb(var(--tint) / 0.1); }
+html.desktop .page-head .btn.primary { height: 28px; }
+
+/* the session's own toolbar is the same bar */
+html.desktop .toolbar { height: var(--tb-h); --app-region: drag; background: var(--bg-main); padding-right: max(var(--s3), max(var(--mygo-titlebar-inset-right, 0px), var(--dt-ctl-end, 0px))); }
+html.desktop .toolbar.edge { box-shadow: 0 0.5px 0 var(--hairline); }
+
+/* a machine's tabs ride under the toolbar */
+html.desktop .workbar { top: var(--tb-h); margin-top: 14px; }
+html.desktop .workbar::before { background: color-mix(in srgb, var(--canvas) 70%, transparent); }
+
+/* ---------- large titles ---------- */
+html.desktop .page h1, html.desktop .page-title { font-size: 26px; font-weight: 700; letter-spacing: -0.022em; line-height: 1.15; }
+html.desktop .page-lede { margin: 6px 0 28px; font-size: 14px; color: var(--text-2); }
+
+/* ---------- surfaces: opaque groups with a hairline, as System Settings draws them ---------- */
+html.desktop :is(.group-card, .sx-surface, .ws-card, .uh-card, .uf-row, .flow-card, .empty-state, .agent-card, .quick, .stat-tile, .isec-body, .iproj, .rail, .fcard) { background: var(--material); box-shadow: var(--elev-1); }
+html.desktop .ws-card:hover, html.desktop .ws-card:focus-within, html.desktop .agent-card:not(.empty):hover { box-shadow: var(--elev-2); }
+html.desktop .sx-live { background: var(--material); box-shadow: var(--elev-1), inset 0 0 0 1px color-mix(in srgb, var(--success) 20%, transparent); }
+html.desktop .sx-live::before { display: none; }
+html.desktop .workbar-glass { background: var(--material); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--elev-1); }
+
+/* section labels: sentence case, as macOS sets group headings */
+html.desktop .section-label { text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; color: var(--text-2); margin: 28px 0 8px 2px; }
+
+/* ---------- home: figures as one quiet strip, not four tiles ---------- */
+html.desktop .stat-row { gap: 0; padding: 4px 0; margin-bottom: 8px; border-radius: var(--dt-radius-group); background: var(--material); box-shadow: var(--elev-1); grid-template-columns: repeat(4, minmax(0, 1fr)); }
+html.desktop .stat-card { background: none; box-shadow: none; border-radius: 0; padding: 10px 20px; }
+html.desktop .stat-card + .stat-card { box-shadow: inset 0.5px 0 0 var(--hairline); }
+html.desktop .stat-ic { display: none; }
+html.desktop .stat-card .stat-v { font-size: 22px; font-weight: 650; }
+/* a row's action appears with the row */
+html.desktop .act-row .btn.sm { opacity: 0; background: none; box-shadow: none; color: var(--accent); transition: opacity var(--t-fast); }
+html.desktop .act-row:hover .btn.sm, html.desktop .act-row:focus-within .btn.sm { opacity: 1; }
+html.desktop .act-row .btn.sm:hover { background: var(--accent-fill); }
+
+/* ---------- selection in lists inside pages: the accent while the window is active ---------- */
+html.desktop[data-inactive] .lrow.on { background: var(--dt-sel-strong); color: var(--text); }
+html.desktop[data-inactive] .lrow.on :is(.lrow-sub, .pill-quiet) { color: var(--text-3); }
+
+/* ---------- launch screen ---------- */
+.dt-launch { position: fixed; inset: 0; display: grid; place-items: center; background: var(--canvas); --app-region: drag; }
+.dt-launch-body { display: flex; flex-direction: column; align-items: center; text-align: center; width: min(460px, 86vw); opacity: 0; transform: translateY(4px); transition: opacity 400ms var(--ease-out), transform 500ms var(--ease); }
+.dt-launch[data-shown] .dt-launch-body { opacity: 1; transform: none; }
+.dt-launch-icon { width: 72px; height: 72px; border-radius: 17px; box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.45), 0 0 0 0.5px rgb(0 0 0 / 0.15); }
+.dt-launch h1 { margin: 20px 0 0; font-size: 20px; font-weight: 650; letter-spacing: -0.018em; color: var(--text); }
+.dt-launch-detail { margin: 6px 0 0; min-height: 20px; font-size: 13px; color: var(--text-2); line-height: 1.5; overflow-wrap: anywhere; }
+.dt-progress { position: relative; width: 132px; height: 3px; margin-top: 18px; border-radius: 2px; background: rgb(var(--tint) / 0.1); overflow: hidden; }
+.dt-progress span { position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 2px; background: rgb(var(--tint) / 0.45); animation: dt-indeterminate 1.4s var(--ease) infinite; }
+@keyframes dt-indeterminate { from { left: -40%; } to { left: 100%; } }
+.dt-launch-actions { display: flex; gap: 8px; margin-top: 20px; --app-region: no-drag; }
+.dt-launch-logs { --app-region: no-drag; margin: 20px 0 0; width: 100%; max-height: 40vh; overflow: auto; padding: 12px 14px; text-align: left; border-radius: 10px; background: var(--material); box-shadow: var(--elev-1); font: 11.5px/1.55 var(--mono); color: var(--text-2); white-space: pre-wrap; -webkit-user-select: text; user-select: text; }
+
+/* ---------- the toolbar spans the document: back and forward lead, the page's actions end it ----------
+   The page's head sits in the centred reading column; as a toolbar it breaks out of it to the document's edges,
+   which the page (a size container) knows. */
+html.desktop .page { container: dt-page / inline-size; }
+html.desktop .page-inner { --dt-col: 1180px; }
+html.desktop .page-inner.wide { --dt-col: 1240px; }
+html.desktop .page-inner.trash { --dt-col: 900px; }
+@media (min-width: 1800px) { html.desktop .page-inner, html.desktop .page-inner.wide { --dt-col: 1480px; } }
+@media (min-width: 2400px) { html.desktop .page-inner, html.desktop .page-inner.wide { --dt-col: 1760px; } }
+html.desktop .page-head {
+  --dt-inset: calc(var(--pad-x) + max(0px, (100cqw - var(--dt-col)) / 2));
+  margin-left: calc(var(--dt-inset) * -1); margin-right: calc(var(--dt-inset) * -1);
+  padding-left: var(--dt-lead); padding-right: max(12px, max(var(--mygo-titlebar-inset-right, 0px), var(--dt-ctl-end, 0px)));
+}
+html.desktop { --dt-lead: 92px; --dt-side-cur: var(--side-w, 232px); }
+html.desktop:has(.window[data-side="collapsed"]:not(.compact)) { --dt-side-cur: var(--rail); }
+html.desktop:has(.window.compact) { --dt-side-cur: 0px; --dt-lead: 92px; }
+html.desktop .toolbar { padding-left: var(--dt-lead); }
+html.desktop .toolbar > .tb-btn:first-child { margin-left: 0; }
+
+.dt-navbtns { position: fixed; top: calc((var(--tb-h) - 28px) / 2); left: calc(var(--dt-side-cur) + 14px); z-index: 20; display: flex; gap: 2px; transition: left var(--t-slow) var(--ease); }
+html.resizing .dt-navbtns { transition: none; }
+.dt-navbtn { width: 32px; height: 28px; display: grid; place-items: center; border-radius: 7px; color: var(--text-2); transition: background var(--t-fast), color var(--t-fast); }
+.dt-navbtn:hover:not(:disabled) { background: rgb(var(--tint) / 0.07); color: var(--text); }
+.dt-navbtn:active:not(:disabled) { background: rgb(var(--tint) / 0.11); }
+.dt-navbtn:disabled { color: var(--text-3); opacity: 0.45; }
+/* while a sheet or the palette is up, the toolbar's buttons step back with the page */
+html.desktop:has(.overlay) .dt-navbtns { opacity: 0.35; pointer-events: none; }
+/* below 760px the web client floats its own sidebar button where these would be */
+html.desktop:has(.window.compact) .dt-navbtns { left: 54px; }
+
+/* ---------- the sidebar's foot: status, then the window's tools ---------- */
+html.desktop .dt-nav-foot { display: flex; align-items: center; gap: 2px; min-height: 32px; margin: 0 -2px; padding-top: 6px; box-shadow: 0 -0.5px 0 var(--hairline); flex: none; }
+html.desktop .dt-status { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border-radius: 7px; font-size: 11.5px; color: var(--text-3); }
+html.desktop .dt-status:hover { background: rgb(var(--tint) / 0.045); color: var(--text-2); }
+html.desktop .dt-status .dot { width: 6px; height: 6px; }
+html.desktop .dt-foot-btn { position: relative; width: 30px; height: 28px; color: var(--text-3); }
+html.desktop .dt-foot-btn:hover { color: var(--text); }
+html.desktop .dt-foot-btn.alert { color: var(--text); }
+html.desktop .dt-badge { position: absolute; top: 1px; right: 0; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; display: grid; place-items: center; font: 600 9.5px/1 var(--sans); color: #fff; background: var(--error); box-shadow: 0 0 0 1.5px var(--dt-side); font-variant-numeric: tabular-nums; }
+html.desktop .window[data-side="collapsed"]:not(.compact) .dt-nav-foot { flex-direction: column; margin: 0; gap: 4px; box-shadow: none; }
+html.desktop .nav-machine { margin-top: 6px; }
+
+/* ---------- groups of figures: one strip, not a row of tiles ---------- */
+html.desktop .doc-stats { gap: 0; padding: 4px 0; border-radius: var(--dt-radius-group); background: var(--material); box-shadow: var(--elev-1); grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+html.desktop .doc-stats .stat-tile { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; background: none; box-shadow: none; border-radius: 0; padding: 8px 18px; font: inherit; color: inherit; }
+html.desktop .doc-stats .stat-tile + .stat-tile { box-shadow: inset 0.5px 0 0 var(--hairline); }
+html.desktop .doc-stats .stat-tile.link:hover { background: rgb(var(--tint) / 0.04); }
+html.desktop .doc-stats .stat-tile.link .stat-v { color: var(--accent); }
+
+/* ---------- lists in groups: separators start after the symbol ---------- */
+html.desktop .act-row + .act-row { box-shadow: none; }
+html.desktop .act-row { position: relative; }
+html.desktop .act-row + .act-row::before { content: ''; position: absolute; top: 0; left: 48px; right: 12px; height: 0.5px; background: var(--hairline); }
+html.desktop .act-row:hover::before, html.desktop .act-row:hover + .act-row::before { opacity: 0; }
+
+/* ---------- projects: a card holds its latest session, without a second surface inside it ---------- */
+html.desktop .ws-latest { margin: 0 18px; padding: 12px 0 2px; border-radius: 0; background: none; box-shadow: 0 -0.5px 0 var(--hairline); }
+html.desktop .ws-latest:hover { background: none; }
+html.desktop .ws-latest:hover .ws-latest-title .ellip { color: var(--accent); }
+html.desktop .ws-latest-label { text-transform: none; letter-spacing: 0; font-size: 11.5px; }
+
+/* ---------- agents: a card's figures are a line of text, not three more tiles ---------- */
+html.desktop .agent-card .agent-nums { gap: 0; padding: 2px 16px 12px; }
+html.desktop .agent-card .agent-nums div { background: none; box-shadow: none; border-radius: 0; padding: 4px 0 4px 12px; }
+html.desktop .agent-card .agent-nums div:first-child { padding-left: 0; }
+html.desktop .agent-card .agent-nums div + div { box-shadow: inset 0.5px 0 0 var(--hairline); }
+html.desktop .agent-card .agent-nums b { font-size: 17px; }
+html.desktop .ac-route { background: rgb(var(--tint) / 0.04); box-shadow: none; }
+
+/* ---------- a row of a list is one target: its hover covers its action too ---------- */
+html.desktop .act-row { border-radius: 8px; transition: background var(--t-fast); }
+html.desktop .act-row:hover { background: rgb(var(--tint) / 0.04); }
+html.desktop .act-main:hover { background: none; }
+
+html.desktop { --dt-pop-solid: #2c2c2e; }
+html.desktop[data-theme="graphite"] { --dt-pop-solid: #232325; }
+html.desktop[data-theme="paper"] { --dt-pop-solid: #fbfbfc; }
+
+/* ---------- crumbs in a narrow toolbar: the ancestors go, the current place stays whole ---------- */
+html.desktop .toolbar .crumb-item:last-child { flex: 0 1 auto; min-width: 0; }
+@container doc (max-width: 1080px) {
+  html.desktop .toolbar .crumb-item:not(:last-child) { display: none; }
+  html.desktop .toolbar .crumb-here { max-width: 240px; }
+}
+
+/* ---------- every group heading in sentence case ---------- */
+html.desktop .installed-head > span:first-child, html.desktop .isec-title { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--text-2); }
+html.desktop .installed-head > span:first-child { font-size: 13px; }
+
+/* ---------- menus and popovers: a thick material; what is behind is a hint, not something to read ---------- */
+html.desktop { --glass-strong: rgb(40 40 43 / 0.9); --bg-palette: rgb(36 36 39 / 0.9); }
+html.desktop[data-theme="graphite"] { --glass-strong: rgb(30 30 32 / 0.92); --bg-palette: rgb(28 28 30 / 0.92); }
+html.desktop[data-theme="paper"] { --glass-strong: rgb(248 248 250 / 0.9); --bg-palette: rgb(250 250 252 / 0.9); }
+
+/* ---------- the inspector: its top is title bar too (window controls on the right sit there) ---------- */
+html.desktop .inspector { background: var(--canvas); box-shadow: inset 0.5px 0 0 var(--hairline); }
+html.desktop .inspector::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: var(--tb-h); z-index: 1; --app-region: drag; }
+html.desktop .inspector-inner { padding-top: calc(var(--tb-h) + 2px); }
+html.desktop[data-theme="paper"] .inspector { background: #f6f6f7; }
+html.desktop .window[data-insp="open"] .toolbar { padding-right: var(--s3); }
+@container doc (max-width: 1080px) {
+  html.desktop .toolbar .crumb-item:last-child > .icon:first-child { display: none; }
+}
+
+.dt-app { display: contents; }
+html.desktop .window[data-insp="open"] .toolbar { padding-right: var(--s3); }
+html.desktop .window[data-insp="open"] .inspector-inner { padding-top: calc(var(--tb-h) + 2px); }
+html.desktop .window[data-insp="open"] .inspector::before { right: 0; }
+
+/* ---------- the backend's state over the client ---------- */
+.dt-launch.over { background: color-mix(in srgb, var(--canvas) 72%, transparent); z-index: 50; transition: opacity 240ms var(--ease-out); opacity: 0; }
+.dt-launch.over[data-shown] { opacity: 1; }
+html:not([data-no-blur]) .dt-launch.over { -webkit-backdrop-filter: blur(6px) saturate(140%); backdrop-filter: blur(6px) saturate(140%); }
+.dt-launch.over .dt-launch-body { padding: 26px 28px 24px; width: min(420px, 86vw); border-radius: 16px; background: var(--dt-pop-solid); box-shadow: var(--elev-2); }
+.dt-launch.over h1 { margin-top: 0; font-size: 17px; }
+.dt-launch-path { margin: 8px 0 0; font-size: 11.5px; color: var(--text-3); overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }
+.dt-app[inert] .dt-navbtns { opacity: 0.4; }
+/* the panel says what the server is doing; the client's own "not responding" pill would say it twice */
+html.desktop:has(.dt-launch) .offline { display: none; }
