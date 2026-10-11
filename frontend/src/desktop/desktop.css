@@ -314,9 +314,14 @@ html.desktop .act-row { border-radius: 8px; transition: background var(--t-fast)
 html.desktop .act-row:hover { background: rgb(var(--tint) / 0.04); }
 html.desktop .act-main:hover { background: none; }
 
+/* ---------- without a compositor that blurs (software rendering), materials are opaque, never see-through ---------- */
 html.desktop { --dt-pop-solid: #2c2c2e; }
 html.desktop[data-theme="graphite"] { --dt-pop-solid: #232325; }
 html.desktop[data-theme="paper"] { --dt-pop-solid: #fbfbfc; }
+html.desktop[data-no-blur] :is(.menu, .palette, .sheet, .findbar, .toast, .outline-panel, .hm-tip, .jump, .workbar-glass) { background: var(--dt-pop-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html.desktop[data-no-blur] .page-head::before { background: var(--canvas); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html.desktop[data-no-blur] .workbar::before { background: var(--canvas); -webkit-backdrop-filter: none; backdrop-filter: none; -webkit-mask-image: none; mask-image: none; }
+html.desktop[data-no-blur] .composer::before { background: linear-gradient(transparent, var(--bg-main)); }
 
 /* ---------- crumbs in a narrow toolbar: the ancestors go, the current place stays whole ---------- */
 html.desktop .toolbar .crumb-item:last-child { flex: 0 1 auto; min-width: 0; }
@@ -334,6 +339,17 @@ html.desktop { --glass-strong: rgb(40 40 43 / 0.9); --bg-palette: rgb(36 36 39 /
 html.desktop[data-theme="graphite"] { --glass-strong: rgb(30 30 32 / 0.92); --bg-palette: rgb(28 28 30 / 0.92); }
 html.desktop[data-theme="paper"] { --glass-strong: rgb(248 248 250 / 0.9); --bg-palette: rgb(250 250 252 / 0.9); }
 
+/* ---------- type on Linux ----------
+   WebKitGTK takes fontconfig's substitute for a family it does not have, so the stack's leading -apple-system /
+   SF Pro resolves to whatever fontconfig prefers (often a CJK face, whose Latin and punctuation are not Inter's).
+   On Linux the stack starts with the fonts the app ships, then the CJK faces for the language. */
+html.desktop[data-platform="linux"] {
+  --sans: 'Inter Variable', 'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC', 'WenQuanYi Micro Hei', sans-serif;
+  --mono: 'JetBrains Mono Variable', 'Noto Sans Mono CJK SC', 'DejaVu Sans Mono', monospace;
+}
+html.desktop[data-platform="linux"]:lang(zh-Hant) { --sans: 'Inter Variable', 'Noto Sans TC', 'Noto Sans CJK TC', 'Source Han Sans TC', sans-serif; --mono: 'JetBrains Mono Variable', 'Noto Sans Mono CJK TC', monospace; }
+html.desktop[data-platform="linux"]:lang(ja) { --sans: 'Inter Variable', 'Noto Sans JP', 'Noto Sans CJK JP', 'Source Han Sans JP', sans-serif; --mono: 'JetBrains Mono Variable', 'Noto Sans Mono CJK JP', monospace; }
+
 /* ---------- the inspector: its top is title bar too (window controls on the right sit there) ---------- */
 html.desktop .inspector { background: var(--canvas); box-shadow: inset 0.5px 0 0 var(--hairline); }
 html.desktop .inspector::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: var(--tb-h); z-index: 1; --app-region: drag; }
@@ -344,10 +360,30 @@ html.desktop .window[data-insp="open"] .toolbar { padding-right: var(--s3); }
   html.desktop .toolbar .crumb-item:last-child > .icon:first-child { display: none; }
 }
 
+/* ---------- title buttons the page draws (Linux) ----------
+   Quiet glyphs in the title bar, a soft round fill on hover, a firmer one when pressed — as the desktop's own
+   header bars show them. They sit in the title bar's band, at the edge the desktop's layout puts them. */
 .dt-app { display: contents; }
+.dt-wc { position: fixed; top: calc((var(--tb-h, 52px) - 30px) / 2); z-index: 60; display: flex; gap: 4px; --app-region: no-drag; }
+.dt-wc-end { right: 10px; }
+.dt-wc-start { left: 10px; }
+.dt-wc-btn { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; color: var(--text-2); background: rgb(var(--tint) / 0.055); transition: background var(--t-fast), color var(--t-fast); }
+.dt-wc-btn svg { fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+.dt-wc-btn:hover { background: rgb(var(--tint) / 0.11); color: var(--text); }
+.dt-wc-btn:active { background: rgb(var(--tint) / 0.17); }
+.dt-wc-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+html[data-inactive] .dt-wc-btn { background: transparent; color: var(--text-3); }
+html[data-inactive] .dt-wc-btn:hover { background: rgb(var(--tint) / 0.08); color: var(--text-2); }
+
+/* the panes under the buttons keep clear of them: the sidebar's title row (start), the rightmost pane (end) */
+html.desktop .nav-head { padding-left: max(var(--side-pad), calc(var(--dt-ctl-start, 0px) + 2px)); }
+.dt-navbtns { left: calc(max(var(--dt-side-cur), var(--dt-ctl-start, 0px)) + 14px); }
 html.desktop .window[data-insp="open"] .toolbar { padding-right: var(--s3); }
 html.desktop .window[data-insp="open"] .inspector-inner { padding-top: calc(var(--tb-h) + 2px); }
 html.desktop .window[data-insp="open"] .inspector::before { right: 0; }
+
+/* a maximized or full-screen window has no edges to resize from or to round */
+html.desktop[data-window="fullscreen"] { --dt-ctl-start: 0px; --dt-ctl-end: 0px; }
 
 /* ---------- the backend's state over the client ---------- */
 .dt-launch.over { background: color-mix(in srgb, var(--canvas) 72%, transparent); z-index: 50; transition: opacity 240ms var(--ease-out); opacity: 0; }
@@ -359,3 +395,29 @@ html:not([data-no-blur]) .dt-launch.over { -webkit-backdrop-filter: blur(6px) sa
 .dt-app[inert] .dt-navbtns { opacity: 0.4; }
 /* the panel says what the server is doing; the client's own "not responding" pill would say it twice */
 html.desktop:has(.dt-launch) .offline { display: none; }
+
+/* ---------- the window's edge, where nothing else draws one ----------
+   A frameless window gets no shadow or border from GNOME's Mutter (nor from KWin): a hairline keeps its edge from
+   dissolving into the desktop. Maximized and full-screen windows meet the screen's edge and need none. */
+html.desktop[data-platform="linux"][data-window="normal"] body::after {
+  content: ''; position: fixed; inset: 0; z-index: 100; pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.28), inset 0 0 0 2px rgb(255 255 255 / 0.04);
+}
+html.desktop[data-platform="linux"][data-window="normal"][data-theme="paper"] body::after { box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.16); }
+html[data-inactive] .dt-wc-btn:active { background: rgb(var(--tint) / 0.14); }
+
+/* ---------- agents: two rows of four (desktop/agentOrder.ts) ----------
+   Four to a row where four fit, else two, else one — never three, which would break the rows the order is made
+   of: in pairs, OpenCode still begins the second four. */
+/* the reading column is the container: columns follow the room the cards really have */
+html.desktop .page-inner { container: dt-inner / inline-size; }
+html.desktop .agent-grid.agent-cards { grid-template-columns: minmax(0, 1fr); }
+@container dt-inner (min-width: 520px) { html.desktop .agent-grid.agent-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container dt-inner (min-width: 1040px) {
+  html.desktop .agent-grid.agent-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  /* four across: the longest name (DeepSeek Harness) keeps to one line */
+  html.desktop .agent-cards .app-tile { width: 42px; height: 42px; border-radius: 11px; }
+  html.desktop .agent-cards .agent-name { font-size: 17px; white-space: nowrap; }
+}
+.app-tile.at-deepseek-harness img { display: block; }
+

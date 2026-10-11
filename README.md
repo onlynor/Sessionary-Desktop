@@ -1,0 +1,234 @@
+# Sessionary Desktop
+
+Sessionary — the control center for your AI coding agents — as a desktop application, built with
+[MyGo](https://github.com/egoist/mygo). Linux first; the boundaries are drawn for macOS and Windows.
+
+It is the whole Sessionary product (Projects, Sessions, live Chat, Model Control, Usage, Machines, Terminal,
+Monitor) in a real application window: a flush source-list sidebar, a title-bar toolbar with back/forward, system
+appearance, system notifications, its own server lifecycle, and none of a browser's chrome or behaviour.
+
+## Architecture
+
+```
+┌──────────────────────── Sessionary Desktop (one Go binary, MyGo) ────────────────────────┐
+│ main.go        app lifecycle, the window, single instance, menus (macOS), quitting        │
+│ desktop.go     services the page calls (typed, generated into frontend/src/mygo.ts)       │
+│ prefs.go       the page's settings, kept in the user data dir                            │
+│ renderer_*.go  WebKitGTK renderer choice (blur where the GPU path is safe)               │
+│ supervise.go   where the bundled runtime and server are; dev vs. production behaviour     │
+│ internal/backend   supervise the server: start, health, restart, give up, stop          │
+│ internal/uiserver  loopback origin: the embedded page + reverse proxy of /api, /gateway  │
+└───────────────┬───────────────────────────────────────────────┬──────────────────────────┘
+                │ http://127.0.0.1:<ui port>                    │ http://127.0.0.1:<app's own port>
+        ┌───────▼────────┐                             ┌────────▼─────────┐
+        │ WebKit window  │  /api, SSE, token, gateway  │ Sessionary server│  ../Sessionary, bundled
+        │ the page       │ ─────────────────────────▶  │ bundled Node.js  │  as server/cli.mjs
+        └────────────────┘                             └──────────────────┘
+```
+
+**Backend.** A production build owns its server: the bundled Node.js runs the bundled server on a loopback port of
+the app's own, remembered between launches (`backend.json` in the user data dir) so Model Control's gateway keeps its
+address, and given up only when it is taken. It never attaches to a server it did not start. A development build may
+use the server a developer runs on `:4777` (`pnpm dev:server`); see [Backend lifecycle](#backend-lifecycle).
+`../Sessionary` is changed only where a new agent has to be registered — its own adapter that reads DeepSeek
+Harness's sessions, its chat/agent registry, and the names and mark the shared Agent UI uses; none of its session,
+model or navigation abstractions is rewritten.
+
+**Page origin.** The page is served from a loopback port by the app itself, not from the server and not from a custom
+scheme, so it talks to the server exactly as the web client does: relative `/api/…` URLs, server-sent events,
+terminals, the per-launch token, the Origin/Host guards. The UI server refuses non-loopback Host names (DNS
+rebinding), like the server does. Because that origin changes between launches, `localStorage` is mirrored to
+`prefs.json` in the user data directory (`frontend/src/desktop/runtime.ts`, `prefs.go`).
+
+**Frontend.** `frontend/` builds Sessionary's web client **in place** from `../Sessionary/web/src` (never copied), with a
+desktop layer on top:
+
+| | |
+|---|---|
+| `src/main.tsx` | restores settings, marks the document, shows the launch screen until the server answers, mounts the client |
+| `src/desktop/desktop.css` | the desktop visual layer, scoped to `html.desktop` (inert in the web build) |
+| `src/desktop/behaviors.ts` | no browser context menu / link dragging / reload keys; back & forward (keys, mouse buttons); scroll state for toolbar materials and overlay scrollbars; menu-bar shortcuts |
+| `src/desktop/NavButtons.tsx` | toolbar back/forward with real enabled state (numbered history entries) |
+| `src/desktop/Launch.tsx` | launch screen; failure view with Retry and the server's output |
+| `src/desktop/runtime.ts` | MyGo runtime glue: prefs bridge, window background follows the theme, menu commands, system notifications |
+| `src/desktop/i18n.ts` | the layer's strings, merged into Sessionary's dictionary (en, 简体, 繁體, 日本語) |
+| `src/overrides/<path>` | replaces `web/src/<path>` wherever the client imports it: `Nav.tsx` (the sidebar as a source list) and `MachinePage.tsx` (the agents' display order). Keep overrides rare; `test/overrides.test.ts` guards them against upstream drift |
+
+React and every package resolve from Sessionary's own install, so there is one copy of each.
+
+## Develop
+
+Requirements to build: Go 1.27+, Bun, Node.js (for the build tools), WebKitGTK 4.1 (Linux), and `pnpm install` done
+in `../Sessionary` (or set `SESSIONARY_DIR`). To run a built app: nothing beyond GTK 3 and WebKitGTK on Linux.
+
+```sh
+bun install --cwd frontend
+bun run dev            # mygo dev: Vite with hot reload through the app's own origin, Go rebuilds on change
+bun run build          # frontend + server + pinned Node.js runtime + mygo build → build/<os>-<arch>/ (.deb, tarball, …)
+bun run typecheck      # go vet (all platforms) + tsc over the desktop layer and the client it pulls in
+```
+
+Scripted runs, for screenshots and checks (development builds only):
+
+```sh
+scripts/run.sh                       # build, start, wait until the server answers (floats the window on niri)
+scripts/drive.py go '#/models'       # navigate · eval · theme · size · shot · status
+scripts/drive.py tour .shots/x ember # every main surface, one PNG each
+```
+
+Environment: `SESSIONARY_DESKTOP_ATTACH=0` always starts an own server · `SESSIONARY_SERVER` a server script ·
+`SESSIONARY_NODE` a Node.js · `SESSIONARY_HOME` Sessionary's data dir (handy for a clean first run) ·
+`SESSIONARY_WINDOW_BUTTONS` the title buttons · `WEBKIT_DISABLE_DMABUF_RENDERER=0|1` overrides the renderer choice.
+
+```sh
+go test ./...                                    # lifecycle (fake servers act out crashes, hangs, …), proxy, layout, dsh
+bun run --cwd frontend test                      # agents' order; overrides in step with the web client
+scripts/smoke.sh build/linux-amd64/sessionary    # the built app, as a first-time user
+scripts/smoke-deb.sh build/linux-amd64/*.deb     # the .deb on a clean Ubuntu in Docker
+```
+
+## Decisions worth knowing
+
+- **Web UI reused, desktop frame replaced.** The client's pages are mature; what made it look like a web app was
+  the frame: a floating card sidebar, an ambient gradient canvas, page headers inside the reading column. The desktop
+  replaces the frame (flush source list, 52px title bar on both sides of the window, toolbar that takes a material
+  only when content scrolls under it, large titles on the reading column) and quiets surfaces (figures as one strip,
+  no cards within cards, sentence-case headings, row actions on hover). Native UI (MyGo's `ui` package) is kept for
+  places with a real advantage — none yet justified it over the existing web surfaces.
+- **Fonts on Linux.** WebKitGTK takes fontconfig's substitute for unknown families, so `-apple-system` silently became
+  Noto Sans CJK. On Linux the stack starts with the bundled Inter, then the CJK face for the UI language.
+- **Blur.** MyGo disables WebKitGTK's DMA-BUF renderer everywhere for safety, which also disables `backdrop-filter`.
+  The app re-enables it unless the only GPU is NVIDIA's own driver, there is no GPU, or it runs in a VM/container; when
+  it is off, the page draws materials opaque instead of see-through (`data-no-blur`).
+- **Window controls.** See [Window controls](#window-controls).
+- **Menus.** macOS gets a menu bar; Linux and Windows keep the window's full height and answer the same shortcuts
+  in the page (`Ctrl K` search, `Ctrl N` new session, `Ctrl ,` settings, `Ctrl 1–5` sections, `Alt ←/→` history).
+
+## Backend lifecycle
+
+One goroutine supervises the server (`internal/backend`); the page only shows the status it is sent.
+
+```text
+launch → start bundled Node + server → wait until it answers (≤ 2 min; it indexes first) → page connects
+       → health check every 2 s ─ 2 misses: "reconnecting" ─ 5 misses: kill the group, restart
+       → server exits: restart with backoff (0.25 s … 8 s); a server that answered and died is restarted for as
+         long as it takes; starts that never answer give up after 5 → "unavailable" (Try Again / Show Details / Quit)
+quit   → SIGTERM to the server's process group (it stops the agents it started), SIGKILL after 5 s
+crash  → the kernel ends the server (Pdeathsig, from a dedicated never-exiting thread)
+```
+
+| State (page) | Phase | What the window shows |
+|---|---|---|
+| Starting | `starting` | launch screen |
+| Connecting | `connecting` | launch screen, "Reading your agents' sessions…" |
+| Ready | `ready` | the client; a new server (`generation`) remounts it on the same page |
+| Reconnecting | `reconnecting` | panel over the inert client |
+| Restarting backend | `restarting` | panel, with the attempt |
+| Backend unavailable | `failed` | panel with Try Again, Show Details (the server's output, log path), Quit |
+
+The window stays interactive throughout: title buttons, moving and resizing, and the panel's actions. Panels appear
+only after a moment (no flash on a hiccup). The server's output goes to `~/.config/Sessionary/logs/backend.log`.
+`/api` and `/gateway` are proxied to whichever server is current; while there is none they answer 503.
+
+**Development:** with a server already on `:4777`, a dev build uses it and, if it goes away, waits for it ("Waiting
+for the development server on port 4777…") rather than starting another one beside it.
+`SESSIONARY_DESKTOP_ATTACH=0` always starts the app's own.
+
+## Bundled runtime
+
+Production builds carry their own Node.js, so nothing needs to be installed on the machine:
+
+| | |
+|---|---|
+| Version | Node.js **24.21.0** (LTS), pinned with each platform's SHA-256 in `scripts/fetch-node.mjs` |
+| Fetched | at **build** time (`node scripts/fetch-node.mjs`, part of `bun run build`), verified, cached in `~/.cache/sessionary-desktop/node`; never at first launch |
+| Staged | `.stage/runtime/{bin/node,LICENSE}` (stripped on Linux: 108 MB), `.stage/server/cli.mjs` (the server, one self-contained file) |
+| Installed | next to the executable: `/opt/sessionary/{sessionary,runtime/bin/node,server/cli.mjs}` from the `.deb` (with `/usr/bin/sessionary-desktop`), the same three in the tarball |
+| Found | `runtimeCandidates()` / `serverScripts()` in `supervise.go`: `SESSIONARY_NODE` / `SESSIONARY_SERVER`, then the resources dir, then the executable's dir (symlinks resolved) |
+| Development | the same `.stage/` once built; failing that, a dev build may use any Node.js ≥ 22.13 it finds (PATH, nvm, volta, fnm, mise, asdf). A production build never uses a system Node.js (`SESSIONARY_SYSTEM_NODE=1` to allow it) |
+
+Package sizes (linux/amd64): `.deb` 46 MB, tarball 46 MB (the runtime is 108 MB of the 121 MB installed).
+
+## Window controls
+
+| Platform | Title bar | Buttons |
+|---|---|---|
+| macOS | hidden, inset | the system's traffic lights over the sidebar |
+| Windows | hidden | Windows 11's caption buttons (with snap layouts), drawn by the system |
+| Linux | frameless (MyGo announces client-side decorations, so no compositor adds a title bar) | drawn by the page, each calling the window's own method; maximize/restore and full screen follow the window's real state |
+
+Linux buttons follow the desktop's layout (`gtk-decoration-layout`: which buttons, which side). Where no desktop owns
+that setting (a bare compositor), all three are shown. A button the window manager cannot honour is left out: on
+X11, what `_NET_WM_ALLOWED_ACTIONS` says for the window (none set: close only); on Wayland, GTK 3 drops the
+compositor's capabilities, so niri, Sway and Hyprland (no minimize) are listed. `SESSIONARY_WINDOW_BUTTONS`
+(`":minimize,maximize,close"`) overrides. The title bar's empty space moves the window, double-click maximizes, the
+outer 5 px resize, F11 toggles full screen.
+
+Why: MyGo's hidden title bar shows GTK's buttons only when the compositor does not prefer server-side decorations;
+niri prefers them but draws no title bar (no buttons at all), KWin draws one (a title bar on top of the page's).
+
+## Linux compatibility
+
+Pragmatic: what CI and the developer machine run is tested; the rest is expected to work and fixed when it blocks.
+
+| Environment | Status | How |
+|---|---|---|
+| niri 26.04 / Wayland (fractional 1.1 + 1.13 text scaling) | tested | daily use; maximize, restore, full screen, close, page-drawn buttons, blur |
+| GNOME 50 / Wayland | tested | headless GNOME Shell: real pointer and keyboard input — drag, double-click maximize, edge resize, buttons, minimize, F11, focus, notifications |
+| X11 (i3 in Xephyr) | tested | real XTest input: drag, F11, close; i3 honours no maximize/resize, so only close is shown |
+| X11 at `GDK_SCALE=2` | tested | renders at 2× |
+| Clean Ubuntu 26.04 (Xvfb, no WM, no Node.js) | tested in CI | `.deb` installed by apt, full smoke test |
+| KDE Plasma / KWin (Wayland, X11) | expected | frameless + `announce_csd` means no KWin title bar; X11 buttons follow KWin's allowed actions; not run here |
+| GNOME / X11 | n/a | GNOME 50 has no X11 session |
+| Multiple monitors, HiDPI > 2× | expected | untested beyond the above; Wayland restores window size, not position (compositors place windows) |
+| NVIDIA-only, VMs, containers | expected | DMA-BUF renderer off → no blur; materials drawn opaque |
+
+## Continuous integration
+
+`.github/workflows/ci.yml`, after Magpie's: on every push and pull request,
+- **go** (Linux, macOS, Windows): gofmt, vet for all three platforms, tests (the lifecycle suite drives real process
+  groups on Unix), race detector on Linux;
+- **package** (linux/amd64, linux/arm64, darwin/arm64, windows/amd64): checks out Sessionary beside the app
+  (`SESSIONARY_TOKEN` secret if private; `sessionary_ref` input), type-checks the frontend, `go tool mygo build`;
+  on Linux, `scripts/smoke.sh` runs the binary under Xvfb and `scripts/smoke-deb.sh` installs the `.deb` on a clean
+  Ubuntu without Node.js and runs the same smoke test. Packages and smoke reports are uploaded.
+
+The smoke test (`SESSIONARY_DESKTOP_SMOKE=report.json`, any build) checks: the bundled server answers, the page
+loads and reaches it through the app's origin, title buttons are drawn, a killed server is replaced and the page
+recovers; then `smoke.sh` checks that quitting left no process of the installation running.
+
+## DeepSeek Harness
+
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) is a **first-class Sessionary agent**,
+like Claude Code, Codex, OpenCode and Pi: Sessionary's adapter reads its own session files, its Agent card and
+AgentPage are the shared ones, and its conversations run on the harness's automation-only ACP server
+(`dsh --profile acp`) through the ACP driver Sessionary already uses. Nothing is embedded, there is no second
+application shell, and there is no second place to configure providers.
+
+| | |
+|---|---|
+| Install | **not bundled**, and **nothing to configure**: one resolver finds a supported installation the machine already has — a `dsh` on `PATH`, an npm/pnpm/bun global installation, or a cached `npx` installation. The resolver needs no source checkout, no environment variable and no Settings entry, and it is the only thing that decides which installation is used, so the probe and the launcher cannot disagree. It validates more than a version string: the package must be `@deepseek-ai/dsh`, ship its CLI entry point, and boot its `acp` profile. The newest supported installation wins (semantic, prerelease-aware), a stale cached one can never hide a valid one, and nothing is downloaded or installed at runtime. `SESSIONARY_DSH` remains as an internal development override |
+| Run | the Sessionary server starts it like any agent, through a launcher it writes beside its own data (the resolved entry point, with the very Node.js the server itself runs on — the app's bundled runtime in a packaged build): `--patch <sessionary>/launch/dsh-sessionary.yml --profile acp`. Its ACP sessions are held open by Sessionary's chat layer, with the restart recovery that already covers the server |
+| Card & pages | exactly the shared Agent card and AgentPage. Open browses its real sessions, projects and search hits; **New session** runs the ordinary workspace flow. A machine with no supported installation shows the ordinary missing state — never an "available" agent that cannot start |
+| Conversation | Sessionary's own chat pages: streaming replies, thinking, tool calls and diffs, the model picker, usage, approval prompts, interruption — the same interface as every other agent |
+| Model Control | the route for `deepseek-harness` (Routing page) reaches it through Sessionary's gateway: the per-launch profile patch mounts `@deepseek-ai/dsh-llm-pi-ai` as Sessionary's own provider (`baseURL = <gateway>/v1`, the gateway key in the process environment). Providers and keys are configured once, in Sessionary. A resumed session whose own recorded model is no longer the route's carries that model only so the harness can restore its log, and is then switched to the route now selected |
+| Isolation | `DSH_HOME` = `<Sessionary data>/deepseek-harness`; your own `~/.dsh` is never read or written, so the two never contend for a session lock. Telemetry off (`DSH_TELEMETRY_DISABLED=1`) unless your environment sets it |
+| Icon | its published mark, bundled with the web client |
+
+Not supported: dsh on SSH nodes (it runs on this computer), and the surfaces the automation-only ACP contract
+intentionally omits (agent presets, the plugin manager, plans, terminals, elicitation). Harness's own settings
+own anything the gateway cannot express.
+
+## Agents tab order
+
+Explicit, in `frontend/src/desktop/agentOrder.ts` (tested): **Claude Code, Codex, DeepSeek Harness, Pi / OpenCode,
+Hermes, WorkBuddy, WorkBuddy AI**; agents it does not name follow in the server's order. Four cards a row where they
+fit at the existing typography (the reading column ≥ 1040 px), else two — never three, which would break the rows —
+else one. The order lives in `overrides/MachinePage.tsx`, the web client's file with only that change;
+`frontend/test/overrides.test.ts` rebuilds the web client's file from it and fails when upstream changes.
+
+## Not yet done
+
+- KDE Plasma run, macOS and Windows smoke runs (CI builds them; only Linux is smoke-tested).
+- Windows: agents started by the server are not stopped with it (no job object yet).
+- macOS: vibrancy sidebar, signing and notarization. A preferences window, auto-update, a tray item for running agents.

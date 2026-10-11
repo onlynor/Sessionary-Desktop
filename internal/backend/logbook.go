@@ -15,12 +15,14 @@ type logBook struct {
 	buf       []string
 	file      *os.File
 	onIndexed func()
+	redact    func(string) string // removes secrets before a line is kept
+	watch     func(raw string)    // sees every line as printed (Program.Announce)
 }
 
 const maxLogFile = 2 << 20
 
-func newLogBook(capacity int, path string) *logBook {
-	l := &logBook{capacity: capacity}
+func newLogBook(capacity int, path string, redact func(string) string) *logBook {
+	l := &logBook{capacity: capacity, redact: redact}
 	if path != "" {
 		if fi, err := os.Stat(path); err == nil && fi.Size() > maxLogFile {
 			_ = os.Rename(path, path+".1")
@@ -32,8 +34,12 @@ func newLogBook(capacity int, path string) *logBook {
 	return l
 }
 
-func (l *logBook) add(line string) {
+func (l *logBook) add(raw string) {
 	l.mu.Lock()
+	watch, line := l.watch, raw
+	if l.redact != nil {
+		line = l.redact(raw)
+	}
 	l.buf = append(l.buf, line)
 	if len(l.buf) > l.capacity {
 		l.buf = l.buf[len(l.buf)-l.capacity:]
@@ -43,9 +49,18 @@ func (l *logBook) add(line string) {
 	}
 	indexed := l.onIndexed
 	l.mu.Unlock()
+	if watch != nil {
+		watch(raw)
+	}
 	if indexed != nil && strings.HasPrefix(line, "indexed in") {
 		indexed()
 	}
+}
+
+func (l *logBook) setWatch(f func(raw string)) {
+	l.mu.Lock()
+	l.watch = f
+	l.mu.Unlock()
 }
 
 func (l *logBook) setOnIndexed(f func()) {

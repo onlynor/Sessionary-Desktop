@@ -84,14 +84,20 @@ func openMain() {
 	win.OnReadyToShow(win.Show)
 	followState(win)
 	page := win.Page()
-	// the app's own pages stay in the window; links to the web open in the browser
+	// The app's own pages stay in the window; links the user follows to the web open in the browser. Nothing the
+	// user did not ask for is ever handed to the browser (a frame's load, a redirect): it is only refused.
 	page.OnWillNavigate(func(e *mygo.NavigateEvent) {
 		u, err := url.Parse(e.URL)
-		if err != nil || (u.Scheme+"://"+u.Host) == ui.URL {
+		if err != nil {
+			e.PreventDefault()
 			return
 		}
-		if u.Scheme == "http" || u.Scheme == "https" || u.Scheme == "mailto" {
-			e.PreventDefault()
+		origin := u.Scheme + "://" + u.Host
+		if origin == ui.URL || u.Scheme == "about" {
+			return
+		}
+		e.PreventDefault()
+		if e.UserInitiated && (u.Scheme == "http" || u.Scheme == "https" || u.Scheme == "mailto") {
 			go mygo.Shell.OpenExternal(e.URL)
 		}
 	})

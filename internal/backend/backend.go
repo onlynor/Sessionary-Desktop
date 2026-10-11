@@ -53,13 +53,61 @@ type Status struct {
 	Detail     string `json:"detail"`     // what is happening, or why it failed
 	Attempt    int    `json:"attempt"`    // failed starts in a row
 	Generation int    `json:"generation"` // counts servers that answered: a new one means new state (token, chats)
+	Entry      string `json:"-"`          // where to open the server (Announce), with its launch token: never sent as status
 	Node       string `json:"node"`       // the Node.js that runs an owned server
 	Server     string `json:"server"`     // the server script
 	LogPath    string `json:"logPath"`    // where its output is kept
 }
 
+// Program describes the server a Backend runs. The zero value is Sessionary's
+// server; another Node.js program (DeepSeek Harness's web server, for one)
+// fills in what differs.
+type Program struct {
+	// Name is what messages call it ("Sessionary" when empty).
+	Name string
+	// Args are the runtime's arguments: the script and how to serve on port (0
+	// when Announce is set). Default: Sessionary's command line.
+	Args func(script string, port int) []string
+	// Dir is the working directory (default: the script's directory).
+	Dir string
+	// Probe reports whether the server answers on port (default: Sessionary's
+	// token endpoint, which nothing else serves).
+	Probe func(ctx context.Context, port int, timeout time.Duration) bool
+	// Announce reads a line of the server's output that says it is ready and
+	// where: the port it chose and the address to open. With it, the server
+	// picks its own port (it is started on 0) and no port is remembered.
+	Announce func(line string) (port int, entry string, ok bool)
+	// Redact removes secrets (launch tokens) from a line before it is kept in
+	// memory or written to the log file.
+	Redact func(line string) string
+	// TermProcess stops the server by signalling it alone, for a server that
+	// stops its own children (which may live outside its process group); the
+	// group is killed only if it does not exit in time. Default: the group.
+	TermProcess bool
+	// FirstDetail is what the status says while a first start is not ready yet.
+	FirstDetail string
+}
+
+func (p *Program) defaults() {
+	if p.Name == "" {
+		p.Name = "Sessionary"
+	}
+	if p.Args == nil {
+		p.Args = nodeArgs
+	}
+	if p.Probe == nil {
+		p.Probe = isSessionary
+	}
+	if p.FirstDetail == "" {
+		p.FirstDetail = "Reading your agents’ sessions…"
+	}
+}
+
 // Options say how to find, start and watch the server.
 type Options struct {
+	// Program is what runs (default: Sessionary's server).
+	Program Program
+
 	// Attach uses a Sessionary already answering on DevPort (development only).
 	Attach  bool
 	DevPort int
@@ -92,6 +140,7 @@ type Options struct {
 }
 
 func (o *Options) defaults() {
+	o.Program.defaults()
 	if o.DevPort == 0 {
 		o.DevPort = DevPort
 	}
@@ -139,8 +188,8 @@ func New(opts Options) *Backend {
 	opts.defaults()
 	return &Backend{
 		opts:   opts,
-		logs:   newLogBook(opts.LogCapacity, opts.LogPath),
-		status: Status{Phase: PhaseStarting, Detail: "Starting Sessionary…", LogPath: opts.LogPath},
+		logs:   newLogBook(opts.LogCapacity, opts.LogPath, opts.Program.Redact),
+		status: Status{Phase: PhaseStarting, Detail: "Starting " + opts.Program.Name + "…", LogPath: opts.LogPath},
 		retry:  make(chan struct{}, 1),
 		stop:   make(chan struct{}),
 		done:   make(chan struct{}),
@@ -178,7 +227,7 @@ func (b *Backend) Start() {
 	b.mu.Unlock()
 	go func() {
 		defer close(b.done)
-		if b.opts.Attach && isSessionary(context.Background(), b.opts.DevPort, b.opts.HealthTimeout) {
+		if b.opts.Attach && b.opts.Program.Probe(context.Background(), b.opts.DevPort, b.opts.HealthTimeout) {
 			b.attached(b.opts.DevPort)
 			return
 		}
@@ -257,7 +306,10 @@ run:
 	// after: those are restarted for as long as it takes, more slowly each time.
 	failures, quick, lastPort, lastFailed := 0, 0, 0, false
 	for !b.stopping() {
-		port, err := b.choosePort(lastPort, lastFailed)
+		port, err := 0, error(nil)
+		if b.opts.Program.Announce == nil { // a server that announces its port chooses it itself
+			port, err = b.choosePort(lastPort, lastFailed)
+		}
 		if err != nil {
 			failures++
 			b.logs.add("sessionary-desktop: " + err.Error())
@@ -290,14 +342,16 @@ run:
 			case <-b.stop:
 			case <-b.retry:
 				failures, quick = 0, 0
-				b.set(func(s *Status) { s.Phase, s.Attempt, s.Detail = PhaseRestarting, 0, "Starting Sessionary…" })
+				b.set(func(s *Status) {
+					s.Phase, s.Attempt, s.Detail = PhaseRestarting, 0, "Starting "+b.opts.Program.Name+"…"
+				})
 			}
 			continue
 		}
 		delay := backoff(max(failures, quick))
 		b.set(func(s *Status) {
 			s.Phase, s.Attempt = PhaseRestarting, failures
-			s.Detail = "Sessionary stopped — restarting…"
+			s.Detail = b.opts.Program.Name + " stopped — restarting…"
 		})
 		select {
 		case <-b.stop:
@@ -306,6 +360,11 @@ run:
 		}
 	}
 	b.set(func(s *Status) { s.Phase, s.Detail = PhaseStopped, "Stopped" })
+}
+
+type announcement struct {
+	port  int
+	entry string
 }
 
 // backoff is the pause before the n-th restart in a row: 0.25s, 0.5s, 1s, … 8s.
@@ -324,13 +383,31 @@ func (b *Backend) runOnce(node, script string, port, failures int) (time.Duratio
 	b.set(func(s *Status) {
 		s.URL, s.Port, s.Attempt = baseURL(port), port, failures
 		if first {
-			s.Phase, s.Detail = PhaseStarting, "Starting Sessionary…"
+			s.Phase, s.Detail = PhaseStarting, "Starting "+b.opts.Program.Name+"…"
 		} else if s.Phase != PhaseRestarting {
-			s.Phase, s.Detail = PhaseRestarting, "Restarting Sessionary…"
+			s.Phase, s.Detail = PhaseRestarting, "Restarting "+b.opts.Program.Name+"…"
 		}
 	})
-	b.logs.add(fmt.Sprintf("sessionary-desktop: starting %s %s on port %d", node, script, port))
-	p, err := startProcess(node, script, port, b.opts.Env, b.logs)
+	prog := b.opts.Program
+	if prog.Announce != nil {
+		b.logs.add(fmt.Sprintf("sessionary-desktop: starting %s %s", node, script))
+	} else {
+		b.logs.add(fmt.Sprintf("sessionary-desktop: starting %s %s on port %d", node, script, port))
+	}
+	// a server that says where it listens: what it announces, once
+	announced := make(chan announcement, 1)
+	if prog.Announce != nil {
+		b.logs.setWatch(func(raw string) {
+			if port, entry, ok := prog.Announce(raw); ok {
+				select {
+				case announced <- announcement{port, entry}:
+				default:
+				}
+			}
+		})
+		defer b.logs.setWatch(nil)
+	}
+	p, err := startProcess(node, script, prog.Args(script, port), prog.Dir, b.opts.Env, b.logs, prog.TermProcess)
 	if err != nil {
 		return 0, err
 	}
@@ -345,7 +422,7 @@ func (b *Backend) runOnce(node, script string, port, failures int) (time.Duratio
 	b.set(func(s *Status) {
 		s.Phase = PhaseConnecting
 		if first {
-			s.Detail = "Reading your agents’ sessions…"
+			s.Detail = prog.FirstDetail
 		} else {
 			s.Detail = "Reconnecting…"
 		}
@@ -363,6 +440,7 @@ func (b *Backend) runOnce(node, script string, port, failures int) (time.Duratio
 	defer deadline.Stop()
 	poll := time.NewTicker(150 * time.Millisecond)
 	defer poll.Stop()
+	entry := ""
 	for answered := false; !answered; {
 		select {
 		case <-b.stop:
@@ -373,13 +451,21 @@ func (b *Backend) runOnce(node, script string, port, failures int) (time.Duratio
 		case <-deadline.C:
 			p.terminate(b.opts.StopTimeout)
 			return 0, fmt.Errorf("the server did not answer within %s", b.opts.StartupTimeout)
+		case a := <-announced:
+			port, entry = a.port, a.entry
+			b.set(func(s *Status) { s.URL, s.Port = baseURL(port), port })
+			answered = prog.Probe(context.Background(), port, b.opts.HealthTimeout)
 		case <-poll.C:
-			answered = isSessionary(context.Background(), port, b.opts.HealthTimeout)
+			if port != 0 {
+				answered = prog.Probe(context.Background(), port, b.opts.HealthTimeout)
+			}
 		}
 	}
 	readyAt := time.Now()
-	b.rememberPort(port)
-	b.set(func(s *Status) { s.Phase, s.Detail, s.Attempt = PhaseReady, "", 0; s.Generation++ })
+	if prog.Announce == nil {
+		b.rememberPort(port)
+	}
+	b.set(func(s *Status) { s.Phase, s.Detail, s.Attempt, s.Entry = PhaseReady, "", 0, entry; s.Generation++ })
 
 	// ---- while it runs: is it still answering? ----
 	tick := time.NewTicker(b.opts.HealthInterval)
@@ -393,7 +479,7 @@ func (b *Backend) runOnce(node, script string, port, failures int) (time.Duratio
 		case <-p.exited:
 			return time.Since(readyAt), fmt.Errorf("the server exited (%s)", p.exitText())
 		case <-tick.C:
-			if isSessionary(context.Background(), port, b.opts.HealthTimeout) {
+			if prog.Probe(context.Background(), port, b.opts.HealthTimeout) {
 				if misses > 0 {
 					b.set(func(s *Status) { s.Phase, s.Detail = PhaseReady, "" })
 				}
@@ -402,7 +488,7 @@ func (b *Backend) runOnce(node, script string, port, failures int) (time.Duratio
 			}
 			misses++
 			if misses == 2 {
-				b.set(func(s *Status) { s.Phase, s.Detail = PhaseReconnecting, "Sessionary isn’t responding…" })
+				b.set(func(s *Status) { s.Phase, s.Detail = PhaseReconnecting, b.opts.Program.Name+" isn’t responding…" })
 			}
 			if misses >= b.opts.Unresponsive {
 				b.logs.add("sessionary-desktop: the server stopped answering; restarting it")
@@ -432,7 +518,7 @@ func (b *Backend) attached(port int) {
 			return
 		case <-tick.C:
 		}
-		if isSessionary(context.Background(), port, b.opts.HealthTimeout) {
+		if b.opts.Program.Probe(context.Background(), port, b.opts.HealthTimeout) {
 			if misses >= 2 {
 				// back: a restarted server is a new one (new token, no chats)
 				b.set(func(s *Status) { s.Phase, s.Detail = PhaseReady, ""; s.Generation++ })
@@ -537,7 +623,7 @@ func (b *Backend) locate() (node, script string, err error) {
 		}
 	}
 	if script == "" {
-		return "", "", errors.New("the Sessionary server is missing from this installation")
+		return "", "", fmt.Errorf("the %s server is missing from this installation", b.opts.Program.Name)
 	}
 	if b.opts.Node != "" {
 		return b.opts.Node, script, nil
@@ -549,12 +635,12 @@ func (b *Backend) locate() (node, script string, err error) {
 // explain says why the server could not be started, in words a user can act on.
 func (b *Backend) explain() string {
 	switch {
-	case b.logs.contains("database is locked"):
+	case b.opts.Program.Name == "Sessionary" && b.logs.contains("database is locked"):
 		return "Another Sessionary is using the same data (for example `sessionary` running in a terminal). Quit it, then try again."
 	case b.logs.contains("EACCES") || b.logs.contains("permission denied"):
-		return "Sessionary cannot read or write its data: " + b.logs.last()
+		return b.opts.Program.Name + " cannot read or write its data: " + b.logs.last()
 	}
-	return "Sessionary stopped and could not be started again: " + b.logs.last()
+	return b.opts.Program.Name + " stopped and could not be started again: " + b.logs.last()
 }
 
 // PID returns the process id of the server this app runs, or 0.

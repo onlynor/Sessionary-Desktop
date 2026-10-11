@@ -35,6 +35,7 @@ const ROWS: [string, string, string, string][] = [
   ['Maximize', '最大化', '最大化', '最大化'],
   ['Restore', '还原', '還原', '元に戻す'],
   ['Forward', '前进', '前進', '進む'],
+  ['Running', '运行中', '執行中', '実行中'],
 ]
 
 const COLS = ['zh-Hans', 'zh-Hant', 'ja'] as const

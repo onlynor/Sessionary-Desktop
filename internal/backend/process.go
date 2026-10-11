@@ -10,12 +10,14 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 )
 
 // process is one run of the server.
 type process struct {
 	cmd    *exec.Cmd
+	alone  bool          // stop the server alone first (Program.TermProcess), not its group
 	exited chan struct{} // closed when it has exited and its output is read
 	err    error         // how it exited, once exited is closed
 }
@@ -34,9 +36,12 @@ var spawner = sync.OnceValue(func() chan func() {
 	return ch
 })
 
-func startProcess(node, script string, port int, env []string, logs *logBook) (*process, error) {
-	cmd := exec.Command(node, nodeArgs(script, port)...)
-	cmd.Dir = filepath.Dir(script)
+func startProcess(node, script string, args []string, dir string, env []string, logs *logBook, alone bool) (*process, error) {
+	cmd := exec.Command(node, args...)
+	cmd.Dir = dir
+	if dir == "" {
+		cmd.Dir = filepath.Dir(script)
+	}
 	cmd.Env = append(os.Environ(), env...)
 	configure(cmd)
 	out, err := cmd.StdoutPipe()
@@ -49,7 +54,7 @@ func startProcess(node, script string, port int, env []string, logs *logBook) (*
 	if err := <-errc; err != nil {
 		return nil, fmt.Errorf("could not start %s: %w", node, err)
 	}
-	p := &process{cmd: cmd, exited: make(chan struct{})}
+	p := &process{cmd: cmd, exited: make(chan struct{}), alone: alone}
 	go func() {
 		copyLines(out, logs)
 		p.err = cmd.Wait()
@@ -60,7 +65,7 @@ func startProcess(node, script string, port int, env []string, logs *logBook) (*
 
 // nodeArgs runs the server on a loopback port; node:sqlite's experimental
 // warning is noise in a desktop app's log.
-func nodeArgs(script string, port int) []string {
+func nodeArgs(script string, port int) []string { //nolint:unparam // the default Program.Args
 	return []string{"--disable-warning=ExperimentalWarning", script, "--port", strconv.Itoa(port), "--host", "127.0.0.1", "--no-open"}
 }
 
@@ -73,15 +78,20 @@ func copyLines(r io.Reader, logs *logBook) {
 }
 
 // terminate asks the server's process group to stop (the server stops the
-// agents it started, which share the group), and kills the group if it has not
-// exited within timeout.
+// agents it started, which share the group) — or the server alone, when it
+// stops its own children — and kills the group if it has not exited within
+// timeout.
 func (p *process) terminate(timeout time.Duration) {
 	select {
 	case <-p.exited:
 		return
 	default:
 	}
-	signalGroup(p.cmd, false)
+	if p.alone {
+		_ = p.cmd.Process.Signal(syscall.SIGTERM)
+	} else {
+		signalGroup(p.cmd, false)
+	}
 	select {
 	case <-p.exited:
 	case <-time.After(timeout):

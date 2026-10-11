@@ -4,6 +4,7 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -80,6 +81,11 @@ func fakeServer() {
 		os.Exit(1)
 	}
 	fmt.Println("indexed in 1ms")
+	if os.Getenv("FAKE_ANNOUNCE") == "1" {
+		// as DeepSeek Harness's web server says where it listens when started on port 0
+		fmt.Println("dsh web: listening on 127.0.0.1 over plain HTTP; restrict this port to a trusted proxy or network")
+		fmt.Printf("dsh web: http://%s/?token=SECRET-%d\n", l.Addr(), n)
+	}
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"token":"t`+strconv.Itoa(n)+`"}`)
@@ -472,5 +478,89 @@ func TestFailureNamesTheError(t *testing.T) {
 	h.b.Start()
 	if s := h.waitFor("failed", phase(PhaseFailed)); !strings.HasSuffix(s.Detail, "Error: fake failure") {
 		t.Fatalf("detail = %q", s.Detail)
+	}
+}
+
+// a server that picks its own port and announces it, as `dsh web --port 0` does
+var announcedProgram = Program{
+	Name: "DeepSeek Harness",
+	Args: func(script string, port int) []string {
+		return []string{script, "web", "--no-open", "--port", strconv.Itoa(port)}
+	},
+	Announce: func(line string) (int, string, bool) {
+		rest, ok := strings.CutPrefix(line, "dsh web: http://127.0.0.1:")
+		if !ok {
+			return 0, "", false
+		}
+		portText, _, _ := strings.Cut(rest, "/")
+		port, err := strconv.Atoi(portText)
+		return port, strings.TrimPrefix(line, "dsh web: "), err == nil
+	},
+	Redact: func(line string) string {
+		if i := strings.Index(line, "token="); i >= 0 {
+			return line[:i] + "token=…"
+		}
+		return line
+	},
+	TermProcess: true,
+}
+
+func TestAnnouncedServer(t *testing.T) {
+	logFile := filepath.Join(t.TempDir(), "harness.log")
+	h := newHarness(t, "crash:400ms,ok", func(o *Options) {
+		o.Program = announcedProgram
+		o.Env = append(o.Env, "FAKE_ANNOUNCE=1")
+		o.LogPath = logFile
+	})
+	h.b.Start()
+	s := h.waitFor("first server", func(s Status) bool { return s.Phase == PhaseReady && s.Generation == 1 })
+	if s.Port == 0 || !strings.Contains(s.Entry, fmt.Sprintf("127.0.0.1:%d/?token=SECRET-1", s.Port)) {
+		t.Fatalf("entry %q does not match port %d", s.Entry, s.Port)
+	}
+	first := s.Port
+	s = h.waitFor("second server", func(s Status) bool { return s.Phase == PhaseReady && s.Generation == 2 })
+	if !strings.HasSuffix(s.Entry, "token=SECRET-2") {
+		t.Fatalf("after a restart the entry is %q, want the new server's token", s.Entry)
+	}
+	t.Logf("ports %d then %d", first, s.Port)
+	if strings.Contains(strings.Join(h.b.Logs(), "\n"), "SECRET") || strings.Contains(readFile(logFile), "SECRET") {
+		t.Fatal("a launch token was kept in the logs")
+	}
+	if !strings.Contains(readFile(logFile), "token=…") {
+		t.Fatal("the announcement is missing from the log file")
+	}
+	if raw, _ := json.Marshal(s); strings.Contains(string(raw), "SECRET") {
+		t.Fatal("the launch token is in the status sent to the page")
+	}
+}
+
+func TestAnnouncedServerNeverAnnouncing(t *testing.T) {
+	h := newHarness(t, "ok", func(o *Options) {
+		o.Program = announcedProgram // no FAKE_ANNOUNCE: it serves, but never says where
+		o.StartupTimeout, o.MaxFailures = 500*time.Millisecond, 1
+	})
+	h.b.Start()
+	s := h.waitFor("failed", phase(PhaseFailed))
+	if !strings.HasPrefix(s.Detail, "DeepSeek Harness stopped") {
+		t.Fatalf("detail %q does not name the program", s.Detail)
+	}
+}
+
+func TestStopTheServerAloneFirst(t *testing.T) {
+	h := newHarness(t, "child", func(o *Options) {
+		o.Program = announcedProgram
+		o.Env = append(o.Env, "FAKE_ANNOUNCE=1")
+	})
+	h.b.Start()
+	h.waitFor("ready", phase(PhaseReady))
+	server := pids(filepath.Join(h.dir, "pids"))[0]
+	child := pids(filepath.Join(h.dir, "children"))[0]
+	h.b.Stop()
+	// the child gets the group's SIGKILL once the server has exited: give the kernel a moment to deliver it
+	for i := 0; i < 50 && (alive(server) || alive(child)); i++ {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if alive(server) || alive(child) {
+		t.Fatalf("left running: server %v, child %v", alive(server), alive(child))
 	}
 }
