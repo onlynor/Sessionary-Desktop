@@ -48,9 +48,9 @@ func main() {
 			log.Fatal(err)
 		}
 		server.Start()
+		installTray() // before the page asks whether there is one (Info.Tray)
 		openMain()
 		installMenu()
-		installTray()
 		startDrive()
 		startSmoke()
 	})

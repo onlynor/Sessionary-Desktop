@@ -27,11 +27,12 @@ type Info struct {
 	Version  string `json:"version"`
 	Dev      bool   `json:"dev"`
 	Blur     bool   `json:"blur"` // whether materials can blur what is behind them
+	Tray     bool   `json:"tray"` // a tray is installed: Minimize hides the window there
 }
 
 // Info returns facts about the app.
 func (Desktop) Info() Info {
-	return Info{Platform: runtime.GOOS, Version: version, Dev: mygo.IsDev(), Blur: blur()}
+	return Info{Platform: runtime.GOOS, Version: version, Dev: mygo.IsDev(), Blur: blur(), Tray: trayInstalled()}
 }
 
 // Backend returns the Sessionary server's status.
@@ -87,3 +88,17 @@ func (Desktop) Attention(ctx context.Context) {
 // GPU; MyGo turns WebKitGTK's DMA-BUF renderer off everywhere for safety, which also drops backdrop-filter, so on
 // Linux the page draws its materials opaque instead (`data-no-blur`) rather than guessing per GPU or machine.
 func blur() bool { return runtime.GOOS != "linux" }
+
+// Minimize puts the window away: into the tray when there is one (hidden windows come back from its menu, a second
+// launch or a notification), else the system minimizes it. The page draws a Minimize button on Linux only when
+// there is a tray, so it never does nothing.
+func (Desktop) Minimize(ctx context.Context) {
+	w := mygo.CallerWindow(ctx)
+	switch {
+	case w == nil:
+	case trayInstalled():
+		w.Hide()
+	default:
+		w.Minimize()
+	}
+}

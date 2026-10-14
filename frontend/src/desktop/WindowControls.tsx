@@ -23,8 +23,6 @@ export function useWindowState() {
   return state
 }
 
-/** The same three buttons on the same side everywhere the page draws them (Linux). */
-const BUTTONS: Button[] = ['minimize', 'maximize', 'close']
 
 /**
  * The title buttons, where the page draws them: on Linux the window is frameless (MyGo announces client-side
@@ -34,15 +32,22 @@ const BUTTONS: Button[] = ['minimize', 'maximize', 'close']
  */
 export function WindowControls({ state }: { state: WindowState }) {
   useT()
+  // Minimize hides the window in the tray, which is the one way back that every compositor honours; with no tray
+  // there is nothing reliable to do, so the button is not drawn rather than doing nothing
+  const [tray, setTray] = useState(false)
+  useEffect(() => {
+    if (inApp && platform === 'linux') Desktop.info().then((i) => setTray(i.tray)).catch(() => {})
+  }, [])
+  const buttons: Button[] = tray ? ['minimize', 'maximize', 'close'] : ['maximize', 'close']
   const shown = inApp && platform === 'linux' && !state.fullScreen
   useLayoutEffect(() => {
-    document.documentElement.style.setProperty('--dt-ctl-end', shown ? `${BUTTONS.length * 34 + 14}px` : '0px')
-  }, [shown])
+    document.documentElement.style.setProperty('--dt-ctl-end', shown ? `${buttons.length * 34 + 14}px` : '0px')
+  }, [shown, buttons.length])
 
   if (!shown) return null
   return (
     <div className="dt-wc dt-wc-end" role="group" aria-label={t('Window')}>
-      {BUTTONS.map((b) => <ControlButton key={b} kind={b} maximized={state.maximized} />)}
+      {buttons.map((b) => <ControlButton key={b} kind={b} maximized={state.maximized} />)}
     </div>
   )
 }
@@ -51,7 +56,7 @@ function ControlButton({ kind, maximized }: { kind: Button; maximized: boolean }
   const label = kind === 'close' ? t('Close') : kind === 'minimize' ? t('Minimize') : maximized ? t('Restore') : t('Maximize')
   const act = () => {
     if (kind === 'close') currentWindow.close()
-    else if (kind === 'minimize') currentWindow.minimize()
+    else if (kind === 'minimize') Desktop.minimize()
     else currentWindow.toggleMaximize()
   }
   return (

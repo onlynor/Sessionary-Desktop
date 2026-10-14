@@ -170,10 +170,11 @@ one CI matrix instead of a table of desktops):
 |---|---|---|
 | macOS | hidden, inset | the system's traffic lights over the sidebar |
 | Windows | hidden | Windows 11's caption buttons (with snap layouts), drawn by the system |
-| Linux | frameless (MyGo announces client-side decorations, so no compositor adds a title bar) | drawn by the page — minimize, maximize, close, always the same, on the right — each calling the window's own method |
+| Linux | frameless (MyGo announces client-side decorations, so no compositor adds a title bar) | drawn by the page, on the right: maximize and close, plus minimize when the app has a tray (see below) |
 
-The title bar's empty space moves the window, double-click maximizes, F11 toggles full screen. A compositor with no
-minimized state simply ignores Minimize; that is accepted rather than special-cased.
+The title bar's empty space moves the window, double-click maximizes, F11 toggles full screen. Linux compositors differ in whether
+they minimize at all, so **Minimize hides the window in the tray** — the way back every compositor honours (tray menu,
+a second launch, a notification) — and with no tray the button is not drawn rather than doing nothing.
 
 ## Window, tray and quitting
 

@@ -7,7 +7,7 @@ export const inApp = isMyGo()
 export const platform: 'darwin' | 'linux' | 'win32' | 'web' = inApp ? (runtime().platform as 'darwin' | 'linux' | 'win32') : 'web'
 
 let info: Info | undefined
-export const appInfo = async () => (info ??= inApp ? await Desktop.info() : { platform: 'web', version: 'dev', dev: true, blur: true })
+export const appInfo = async () => (info ??= inApp ? await Desktop.info() : { platform: 'web', version: 'dev', dev: true, blur: true, tray: false })
 
 /** Marks the document for the desktop layer's styles, before anything paints. */
 export function markDocument() {
