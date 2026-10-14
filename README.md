@@ -200,8 +200,9 @@ NSStatusItem, not an element drawn in the page. Platform notes:
 - **macOS** keeps the Dock icon as well, so both the Dock and the menu bar restore the window; the app is not an
   accessory (no `SetActivationPolicy`).
 - **Windows** uses the notification area (left- and right-clicks both open the menu). The server runs in a job
-  object (`KILL_ON_JOB_CLOSE`), so its agents end with it — on a stop, a restart, or the app crashing; a tool that
-  deliberately breaks away from the job is left alone. Its tests run in CI's Windows job.
+  object (`KILL_ON_JOB_CLOSE`), so it never outlives the app, even if the app crashes; a server that cannot be put in
+  one is not started. Its agents and terminals end with it through Node.js's own job; terminals and editors
+  Sessionary launched detached for you keep running, as on Unix. The tests run in CI's Windows job.
 
 `scripts/dev/drive.py tray` reports whether the tray is installed, `window hide|show|quit` exercises the lifecycle, and
 `go test ./...` covers the icon, the menu and the close-versus-quit rule (`cmd/sessionary-desktop/tray_test.go`).

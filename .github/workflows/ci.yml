@@ -70,7 +70,7 @@ jobs:
       # the job object that keeps agents from outliving the app: real processes, only provable on Windows
       - name: Process lifecycle (Windows job object)
         if: runner.os == 'Windows'
-        run: go test -count=1 -v -run 'Job|Terminate|AppDeath' ./internal/backend
+        run: go test -count=1 -v -run 'Job|Stop|AppDeath|Adopt' ./internal/backend
 
   package:
     name: package (${{ matrix.platform }})

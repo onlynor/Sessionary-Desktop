@@ -57,7 +57,10 @@ func startProcess(node, script string, args []string, dir string, env []string, 
 	p := &process{cmd: cmd, exited: make(chan struct{}), alone: alone}
 	release, err := adopt(cmd)
 	if err != nil {
-		logs.add("could not confine the server's processes (" + err.Error() + "): agents may outlive the app")
+		// refuse to run a server whose lifetime the app cannot guarantee (Windows: no job object)
+		_ = cmd.Process.Kill()
+		go func() { copyLines(out, logs); _ = cmd.Wait() }()
+		return nil, fmt.Errorf("could not take ownership of %s: %w", node, err)
 	}
 	go func() {
 		copyLines(out, logs)

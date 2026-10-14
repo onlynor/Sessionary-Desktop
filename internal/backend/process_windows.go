@@ -14,15 +14,23 @@ func configure(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow | syscall.CREATE_NEW_PROCESS_GROUP}
 }
 
-// Windows has no process groups to signal; its answer is the job object. Each server run gets one, with the agents
-// and terminals it starts (children join their parent's job), and the job is set to kill everything in it when its
-// last handle closes — which the kernel does for us when the app exits or crashes, so nothing the app started is
-// orphaned however the app ends. A process that deliberately leaves with CREATE_BREAKAWAY_FROM_JOB (an
-// intentionally detached tool) is allowed to: BREAKAWAY_OK.
+// Windows has no process groups to signal and no parent-death signal; its answer is the job object. Each server run
+// gets one, set to kill what is in it when its last handle closes — which the kernel does for us when the app
+// exits or crashes, so the server never outlives the app however the app ends.
+//
+// What is *not* in the job is deliberate (SILENT_BREAKAWAY_OK): the server's own children are never associated with
+// it. Sessionary launches terminals, editors and file managers for the user as detached processes
+// (src/core/launch.ts) that must keep running when the desktop app quits, as they do after a stop on Unix, where a
+// detached child leaves the group. The agents and terminals the server runs are not detached, and Node.js (libuv)
+// puts every non-detached child in a job object of its own with KILL_ON_JOB_CLOSE, so they end when the server
+// does. Their cleanup is therefore Node's, ours is the server's: process_windows_test.go proves both halves with Node.
+//
+// The server is the only process that has to be in the job, and it is assigned right after it starts; nothing it
+// could start before that matters, because its children are not members either way.
 const (
 	jobObjectExtendedLimitInformation = 9
 	jobKillOnClose                    = 0x00002000
-	jobBreakawayOK                    = 0x00000800
+	jobSilentBreakawayOK              = 0x00001000
 	processSetQuota                   = 0x0100
 	processTerminate                  = 0x0001
 )
@@ -59,8 +67,8 @@ var (
 )
 
 // adopt puts a just-started server in a job of its own and returns the function that ends the job's life (closing
-// the handle kills whatever is left in it). When any step fails the server runs unconfined, as before, and the
-// error says so: the app must still work, and signalGroup falls back to killing the process alone.
+// the handle kills whatever is left in it). When any step fails the caller must not let the server run: without
+// the job it would outlive an app that crashes, which is exactly what the job is for.
 func adopt(cmd *exec.Cmd) (release func(), err error) {
 	release = func() {}
 	if cmd.Process == nil {
@@ -72,7 +80,7 @@ func adopt(cmd *exec.Cmd) (release func(), err error) {
 	}
 	h := syscall.Handle(job)
 	var lim extendedLimits
-	lim.Basic.LimitFlags = jobKillOnClose | jobBreakawayOK
+	lim.Basic.LimitFlags = jobKillOnClose | jobSilentBreakawayOK
 	if r, _, e := procSetInformationJob.Call(job, jobObjectExtendedLimitInformation, uintptr(unsafe.Pointer(&lim)), unsafe.Sizeof(lim)); r == 0 {
 		_ = syscall.CloseHandle(h)
 		return release, fmt.Errorf("SetInformationJobObject: %w", e)
@@ -95,7 +103,7 @@ func adopt(cmd *exec.Cmd) (release func(), err error) {
 	}, nil
 }
 
-// signalGroup ends the server and everything in its job; with no job, the server alone. There is no gentler
+// signalGroup ends the server (the job's only member); with no job, the process alone. There is no gentler
 // signal for a windowless process, so a graceful stop is the same as a kill.
 func signalGroup(cmd *exec.Cmd, kill bool) {
 	if h, ok := jobs.Load(cmd); ok {
