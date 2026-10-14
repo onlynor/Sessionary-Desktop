@@ -140,15 +140,33 @@ jobs:
       - name: Smoke-test the .deb on a clean Ubuntu
         if: runner.os == 'Linux'
         run: scripts/test/smoke-deb.sh build/linux-*/sessionary_*.deb
-      # macOS and Windows runners have a desktop session: run the packaged app once (best effort until proven there)
+      # macOS and Windows runners have a desktop session, so the packaged app is run once there. This has never
+      # executed: it may not pass. It must not block the build, but its outcome is never implicit — the step after
+      # it states passed / FAILED / not run in the job summary and as an annotation. Compiling and packaging for
+      # these platforms is checked above; native runtime behaviour is claimed only when this says "passed".
       - name: Smoke-test the app (macOS)
+        id: smoke_native
         if: runner.os == 'macOS'
         continue-on-error: true
         run: scripts/test/smoke-native.sh "$(find build -path '*.app/Contents/MacOS/*' -type f | head -1)" "$RUNNER_TEMP/smoke"
       - name: Smoke-test the app (Windows)
+        id: smoke_native_win
         if: runner.os == 'Windows'
         continue-on-error: true
         run: scripts/test/smoke-native.sh "$(find build -name 'sessionary*.exe' ! -iname '*setup*' | head -1)" "$RUNNER_TEMP/smoke"
+      - name: Report the native smoke outcome
+        if: always() && runner.os != 'Linux'
+        env:
+          OUTCOME: ${{ steps.smoke_native.outcome || steps.smoke_native_win.outcome || 'skipped' }}
+        run: |
+          case "$OUTCOME" in
+            success) msg="native smoke on ${{ runner.os }}: passed" ;;
+            failure) msg="native smoke on ${{ runner.os }}: FAILED (not blocking; the packaged app did not run cleanly)" ;;
+            *)       msg="native smoke on ${{ runner.os }}: NOT RUN ($OUTCOME) — runtime behaviour on this OS is unverified" ;;
+          esac
+          echo "$msg"
+          echo "### $msg" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$OUTCOME" != success ]; then echo "::warning title=Unverified on ${{ runner.os }}::$msg"; fi
       - name: Upload the smoke report
         if: always()
         uses: actions/upload-artifact@v4
