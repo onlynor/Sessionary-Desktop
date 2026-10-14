@@ -121,6 +121,9 @@ type Options struct {
 
 	Scripts []string // candidate paths of the server script, tried in order
 	Env     []string // extra environment for the server
+	// ResolveEnv, when set, is asked once when the server is first started (off the caller's thread, it may be slow)
+	// for more environment, which follows Env.
+	ResolveEnv func() []string
 
 	// StatePath remembers the port between launches, so that the gateway's
 	// address stays the same; "" chooses a new one each time.
@@ -227,6 +230,9 @@ func (b *Backend) Start() {
 	b.mu.Unlock()
 	go func() {
 		defer close(b.done)
+		if b.opts.ResolveEnv != nil {
+			b.opts.Env = append(append([]string(nil), b.opts.Env...), b.opts.ResolveEnv()...)
+		}
 		if b.opts.Attach && b.opts.Program.Probe(context.Background(), b.opts.DevPort, b.opts.HealthTimeout) {
 			b.attached(b.opts.DevPort)
 			return

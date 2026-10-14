@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/onlynor/sessionary-desktop/internal/backend"
+	"github.com/onlynor/sessionary-desktop/internal/shellenv"
 )
 
 // backendOptions say where the server and its runtime are, and how the app
@@ -28,6 +29,8 @@ func backendOptions() backend.Options {
 		SystemNode:     dev || os.Getenv("SESSIONARY_SYSTEM_NODE") == "1",
 		Scripts:        serverScripts(),
 		OnChange:       func(s backend.Status) { BackendChanged.Broadcast(s) },
+		// the server and every agent it starts inherit the user's shell PATH, not the launcher's (see shellenv)
+		ResolveEnv: func() []string { return []string{"PATH=" + shellenv.ResolvePath(os.Getenv("PATH"))} },
 	}
 	if dir, err := mygo.App.Path(mygo.PathUserData); err == nil {
 		o.StatePath = filepath.Join(dir, "backend.json")
