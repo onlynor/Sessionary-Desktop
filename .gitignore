@@ -9,3 +9,6 @@ node_modules/
 # development runs and screenshots
 /.run/
 /.shots/
+
+# local design notes
+/docs/
