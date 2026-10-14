@@ -53,6 +53,19 @@ func fakeServer() {
 	kind, arg, _ := strings.Cut(step, ":")
 	d, _ := time.ParseDuration(arg)
 	fmt.Println("fake server, launch", n, step)
+	// what the real server does with its environment: detect an agent by name on PATH, and start it by name
+	_ = os.WriteFile(filepath.Join(dir, "path"), []byte(os.Getenv("PATH")), 0o644)
+	if agent := os.Getenv("FAKE_AGENT"); agent != "" {
+		found, err := exec.LookPath(agent)
+		if err != nil {
+			found = "none"
+		}
+		_ = os.WriteFile(filepath.Join(dir, "agent-detected"), []byte(found), 0o644)
+		if err == nil {
+			out, _ := exec.Command(agent).CombinedOutput()
+			_ = os.WriteFile(filepath.Join(dir, "agent-output"), out, 0o644)
+		}
+	}
 	switch kind {
 	case "exit":
 		fmt.Println("Error: fake failure")
