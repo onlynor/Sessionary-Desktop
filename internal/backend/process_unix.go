@@ -21,3 +21,6 @@ func signalGroup(cmd *exec.Cmd, kill bool) {
 	}
 	_ = syscall.Kill(-cmd.Process.Pid, sig)
 }
+
+// adopt: the process group made by configure is the unit; nothing more to do.
+func adopt(*exec.Cmd) (release func(), err error) { return func() {}, nil }

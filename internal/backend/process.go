@@ -55,9 +55,14 @@ func startProcess(node, script string, args []string, dir string, env []string, 
 		return nil, fmt.Errorf("could not start %s: %w", node, err)
 	}
 	p := &process{cmd: cmd, exited: make(chan struct{}), alone: alone}
+	release, err := adopt(cmd)
+	if err != nil {
+		logs.add("could not confine the server's processes (" + err.Error() + "): agents may outlive the app")
+	}
 	go func() {
 		copyLines(out, logs)
 		p.err = cmd.Wait()
+		release()
 		close(p.exited)
 	}()
 	return p, nil
