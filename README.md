@@ -181,8 +181,8 @@ a second launch, a notification) — and with no tray the button is not drawn ra
 The window's close button **hides the window**; the app keeps running — and keeps its server, so Model Control's
 gateway keeps answering — in the menu bar (macOS) or the notification area (Linux, Windows). The tray's menu brings
 it back, puts it away again, or quits for good; the macOS app menu, `Ctrl Q` and the launch screen's Quit do the
-same. The rule is one line: **with a tray, closing only hides and quitting always closes; without one, closing quits
-as it always did**, so a window can never be left invisible with no way back. A real quit sets a flag before the
+same. The rule is one line: **with a tray that something displays, closing only hides and quitting always closes; without
+one, closing quits as it always did**, so a window can never be left invisible with no way back. A real quit sets a flag before the
 window is closed, so the close handler lets it through, the tray is destroyed, and the server's process group is
 stopped. Activating the app (the Dock, the taskbar, a second launch) restores the **same** window — there is never a
 second one.
@@ -193,12 +193,15 @@ NSStatusItem, not an element drawn in the page. Platform notes:
 
 - **Linux** shows a tray only with `libayatana-appindicator3` (or `libappindicator3`) and a StatusNotifierItem host
   (a bar such as noctalia, waybar or the GNOME AppIndicator extension). Without the library `NewTray` fails and the
-  app runs as before, without a tray (and closing quits). Without a host the icon is registered but nothing displays
-  it; relaunching the app then restores the window (single instance). The menu works through the host's dbusmenu; a
+  app runs as before, without a tray (and closing quits). Whether a host exists is asked of the StatusNotifier watcher on the session
+  bus (every 2 s, protocol only): with none, closing quits and Minimize is not drawn; if the host vanishes while the
+  window is hidden the window is shown again, and when it returns the tray is used again. The menu works through the host's dbusmenu; a
   click on the icon itself is not delivered (AppIndicator has no click events).
 - **macOS** keeps the Dock icon as well, so both the Dock and the menu bar restore the window; the app is not an
   accessory (no `SetActivationPolicy`).
-- **Windows** uses the notification area (left- and right-clicks both open the menu).
+- **Windows** uses the notification area (left- and right-clicks both open the menu). The server runs in a job
+  object (`KILL_ON_JOB_CLOSE`), so its agents end with it — on a stop, a restart, or the app crashing; a tool that
+  deliberately breaks away from the job is left alone. Its tests run in CI's Windows job.
 
 `scripts/dev/drive.py tray` reports whether the tray is installed, `window hide|show|quit` exercises the lifecycle, and
 `go test ./...` covers the icon, the menu and the close-versus-quit rule (`cmd/sessionary-desktop/tray_test.go`).
@@ -251,5 +254,4 @@ else one. The order lives in `overrides/MachinePage.tsx`, the web client's file 
 ## Not yet done
 
 - macOS and Windows smoke runs are wired in CI (`scripts/test/smoke-native.sh`, best effort) but have not run yet; only Linux's is proven.
-- Windows: agents started by the server are not stopped with it (no job object yet).
 - macOS: vibrancy sidebar, signing and notarization. A preferences window, auto-update, a tray badge for running agents.
