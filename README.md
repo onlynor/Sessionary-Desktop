@@ -141,6 +141,12 @@ The window stays interactive throughout: title buttons, moving and resizing, and
 only after a moment (no flash on a hiccup). The server's output goes to `~/.config/Sessionary/logs/backend.log`.
 `/api` and `/gateway` are proxied to whichever server is current; while there is none they answer 503.
 
+**Environment.** An app started from a launcher or desktop entry gets the session's `PATH`, not the terminal's, so
+agents installed in `~/.local/bin`, npm/pnpm globals or a version manager would be "not found on PATH". The server
+is therefore started with the user's login shell's `PATH` (`shell -ilc`, 8 s limit, markers around the answer, merged
+with the current one; any failure keeps the current `PATH`) — `internal/shellenv`. Detection, re-detection and
+starting an agent all read the server's own environment, so they agree.
+
 **Development:** with a server already on `:4777`, a dev build uses it and, if it goes away, waits for it ("Waiting
 for the development server on port 4777…") rather than starting another one beside it.
 `SESSIONARY_DESKTOP_ATTACH=0` always starts the app's own.
