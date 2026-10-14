@@ -19,6 +19,9 @@ export function markDocument() {
 
 // ---------- settings that outlive the page's origin ----------
 const PREFIX = 'sessionary:'
+const prefListeners = new Set<(key: string) => void>()
+/** `fn` hears of every setting the page changes (its key, with the prefix) */
+export const onPref = (fn: (key: string) => void) => { prefListeners.add(fn) }
 
 /**
  * Restores the page's settings from the app before the client reads them, then mirrors every change back.
@@ -42,6 +45,7 @@ export async function restorePrefs() {
   }
   const queue = (k: string, v: string | null) => {
     if (!k.startsWith(PREFIX)) return
+    prefListeners.forEach((fn) => fn(k))
     pending.set(k, v)
     timer ??= window.setTimeout(flush, 250)
   }

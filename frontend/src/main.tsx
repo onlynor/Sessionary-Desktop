@@ -9,6 +9,7 @@ import { registerStrings } from './desktop/i18n'
 import { BackendState } from './desktop/Launch'
 import { WindowControls, useWindowState } from './desktop/WindowControls'
 import { NavButtons, trackHistory } from './desktop/NavButtons'
+import { syncTray } from './desktop/tray'
 import { appInfo, backendStatus, inApp, listenForCommands, markDocument, onBackend, preferSystemTheme, restorePrefs, routeNotifications, syncWindowBackground } from './desktop/runtime'
 import type { Status } from './mygo'
 import { LANGS, getLang, setLang, type Lang } from '@web/i18n'
@@ -34,6 +35,7 @@ async function boot() {
   const { App } = await import('@web/App')
   createRoot(document.getElementById('root')!).render(<Root App={App} />)
   syncWindowBackground()
+  syncTray()
 }
 
 /** the same as index.html's first script, again now that the saved settings are back */

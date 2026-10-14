@@ -35,6 +35,11 @@ const ROWS: [string, string, string, string][] = [
   ['Maximize', '最大化', '最大化', '最大化'],
   ['Restore', '还原', '還原', '元に戻す'],
   ['Forward', '前进', '前進', '進む'],
+  ['Show Sessionary', '显示 Sessionary', '顯示 Sessionary', 'Sessionary を表示'],
+  ['Hide Sessionary', '隐藏 Sessionary', '隱藏 Sessionary', 'Sessionary を隠す'],
+  ['Recent sessions', '最近的会话', '最近的工作階段', '最近のセッション'],
+  ['About Sessionary', '关于 Sessionary', '關於 Sessionary', 'Sessionary について'],
+  ['Quit Sessionary', '退出 Sessionary', '結束 Sessionary', 'Sessionary を終了'],
   ['Running', '运行中', '執行中', '実行中'],
 ]
 
