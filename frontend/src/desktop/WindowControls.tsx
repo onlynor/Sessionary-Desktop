@@ -23,39 +23,28 @@ export function useWindowState() {
   return state
 }
 
-const parse = (layout: string): [Button[], Button[]] => {
-  const side = (s = '') => s.split(',').filter((b): b is Button => b === 'minimize' || b === 'maximize' || b === 'close')
-  const [start, end] = layout.split(':')
-  return [side(start), side(end)]
-}
+/** The same three buttons on the same side everywhere the page draws them (Linux). */
+const BUTTONS: Button[] = ['minimize', 'maximize', 'close']
 
 /**
- * The title buttons, where the page draws them (Linux: the window is frameless, so that no compositor adds a
- * title bar of its own). Which buttons and on which side follow the desktop's layout (gtk-decoration-layout); each
- * calls the window's own method. They leave room for themselves through --dt-ctl-start / --dt-ctl-end.
+ * The title buttons, where the page draws them: on Linux the window is frameless (MyGo announces client-side
+ * decorations, so no compositor adds a title bar of its own); macOS and Windows keep the system's. One fixed set,
+ * no query of the desktop, the compositor or the display server; each calls the window's own method. They leave
+ * room for themselves through --dt-ctl-end.
  */
 export function WindowControls({ state }: { state: WindowState }) {
   useT()
-  const [layout, setLayout] = useState<[Button[], Button[]]>([[], []])
-  useEffect(() => {
-    if (!inApp || platform !== 'linux') return
-    Desktop.chrome().then((c) => setLayout(parse(c.buttons))).catch(() => {})
-  }, [])
-
-  const [start, end] = state.fullScreen ? [[], []] as [Button[], Button[]] : layout
+  const shown = inApp && platform === 'linux' && !state.fullScreen
   useLayoutEffect(() => {
-    const root = document.documentElement.style
-    root.setProperty('--dt-ctl-start', start.length ? `${start.length * 34 + 14}px` : '0px')
-    root.setProperty('--dt-ctl-end', end.length ? `${end.length * 34 + 14}px` : '0px')
-  }, [start.length, end.length])
+    document.documentElement.style.setProperty('--dt-ctl-end', shown ? `${BUTTONS.length * 34 + 14}px` : '0px')
+  }, [shown])
 
-  if (!start.length && !end.length) return null
-  const group = (buttons: Button[], side: 'start' | 'end') => buttons.length > 0 && (
-    <div className={`dt-wc dt-wc-${side}`} role="group" aria-label={t('Window')}>
-      {buttons.map((b) => <ControlButton key={b} kind={b} maximized={state.maximized} />)}
+  if (!shown) return null
+  return (
+    <div className="dt-wc dt-wc-end" role="group" aria-label={t('Window')}>
+      {BUTTONS.map((b) => <ControlButton key={b} kind={b} maximized={state.maximized} />)}
     </div>
   )
-  return <>{group(start, 'start')}{group(end, 'end')}</>
 }
 
 function ControlButton({ kind, maximized }: { kind: Button; maximized: boolean }) {
