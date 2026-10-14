@@ -59,19 +59,31 @@ func TestTrayMenu(t *testing.T) {
 	}
 }
 
-func TestWindowCloseHidesOnlyWithATray(t *testing.T) {
-	quitting, trayReady = false, false
-	// no tray (the AppIndicator library or a host is missing): closing must quit rather than leave an invisible app
+func TestWindowCloseHidesOnlyWithAReachableTray(t *testing.T) {
+	host := &trayWatch{probe: func() bool { return true }}
+	oldHost := trayHost
+	t.Cleanup(func() { quitting, trayReady, trayHost = false, false, oldHost })
+
+	quitting, trayReady, trayHost = false, false, host
+	host.check()
+	// no tray (the AppIndicator library is missing): closing must quit rather than leave an invisible app
 	if shouldHideOnClose() {
 		t.Error("without a tray, closing quits")
 	}
 	trayReady = true
-	if !shouldHideOnClose() {
-		t.Error("with a tray, closing hides the window")
+	if !shouldHideOnClose() || !trayUsable() {
+		t.Error("with a displayed tray, closing hides the window")
 	}
+	// the tray exists but nothing displays it: hiding would strand the window
+	host.probe = func() bool { return false }
+	host.check()
+	if shouldHideOnClose() || trayUsable() {
+		t.Error("a tray no host displays is not a way back: closing quits")
+	}
+	host.probe = func() bool { return true }
+	host.check()
 	quitting = true
 	if shouldHideOnClose() {
 		t.Error("a quit closes the window")
 	}
-	quitting, trayReady = false, false
 }

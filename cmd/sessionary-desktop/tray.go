@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"log"
 	"runtime"
+	"time"
 
 	"github.com/egoist/mygo"
 
@@ -20,8 +22,13 @@ var (
 
 var (
 	tray      *mygo.Tray
-	trayReady bool // a tray is installed, so a closed window can be got back to
+	trayReady bool // a tray is installed (see trayUsable: it must also be reachable)
+	trayHost  *trayWatch
+	trayStop  context.CancelFunc
 )
+
+// TrayChanged is sent when the tray becomes reachable or stops being: the page draws Minimize only while it is.
+var TrayChanged = mygo.NewEvent[bool]("tray")
 
 // quitting is true once the app is on its way out. Closing the window only hides it — the app keeps serving the
 // model gateway while it lives in the tray — so a real quit has to be told apart from a close.
@@ -43,6 +50,20 @@ func installTray() {
 		return
 	}
 	tray, trayReady = t, true
+	trayHost = &trayWatch{probe: defaultTrayProbe(), onChange: trayReachable}
+	trayHost.check() // before the page asks (Info.Tray)
+	var ctx context.Context
+	ctx, trayStop = context.WithCancel(context.Background())
+	go trayHost.run(ctx, 2*time.Second)
+}
+
+// trayReachable reacts to the host appearing or disappearing. A window that was put away must never stay away when
+// its way back is gone, so it is shown again at once.
+func trayReachable(up bool) {
+	_ = TrayChanged.Broadcast(up)
+	if !up && main_ != nil && !main_.IsVisible() {
+		showMain()
+	}
 }
 
 // trayIconFor picks the image for a platform: the black template macOS tints to match the menu bar, the coloured
@@ -75,7 +96,10 @@ func hideMain() {
 // shouldHideOnClose reports whether closing the window should hide it rather than close it. It hides only while a
 // tray is there to get it back from, and never during a quit — so a window is never left invisible with no way
 // back (without a tray, closing quits as it always did), and an explicit quit still closes and stops everything.
-func shouldHideOnClose() bool { return !quitting && trayReady }
+func shouldHideOnClose() bool { return !quitting && trayUsable() }
 
-// trayInstalled reports whether the app has a tray, for the drive socket to check a development build.
+// trayInstalled reports whether the app created a tray, for the drive socket to check a development build.
 func trayInstalled() bool { return trayReady }
+
+// trayUsable reports whether hiding the window is safe: there is a tray and something is displaying it.
+func trayUsable() bool { return trayReady && trayHost != nil && trayHost.Up() }

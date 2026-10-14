@@ -32,7 +32,7 @@ type Info struct {
 
 // Info returns facts about the app.
 func (Desktop) Info() Info {
-	return Info{Platform: runtime.GOOS, Version: version, Dev: mygo.IsDev(), Blur: blur(), Tray: trayInstalled()}
+	return Info{Platform: runtime.GOOS, Version: version, Dev: mygo.IsDev(), Blur: blur(), Tray: trayUsable()}
 }
 
 // Backend returns the Sessionary server's status.
@@ -96,7 +96,7 @@ func (Desktop) Minimize(ctx context.Context) {
 	w := mygo.CallerWindow(ctx)
 	switch {
 	case w == nil:
-	case trayInstalled():
+	case trayUsable():
 		w.Hide()
 	default:
 		w.Minimize()

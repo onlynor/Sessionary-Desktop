@@ -33,10 +33,12 @@ export function useWindowState() {
 export function WindowControls({ state }: { state: WindowState }) {
   useT()
   // Minimize hides the window in the tray, which is the one way back that every compositor honours; with no tray
-  // there is nothing reliable to do, so the button is not drawn rather than doing nothing
+  // (or none displayed) there is nothing reliable to do, so the button is not drawn rather than doing nothing
   const [tray, setTray] = useState(false)
   useEffect(() => {
-    if (inApp && platform === 'linux') Desktop.info().then((i) => setTray(i.tray)).catch(() => {})
+    if (!inApp || platform !== 'linux') return
+    Desktop.info().then((i) => setTray(i.tray)).catch(() => {})
+    return events.tray.on(setTray) // the tray's host can appear, vanish and come back
   }, [])
   const buttons: Button[] = tray ? ['minimize', 'maximize', 'close'] : ['maximize', 'close']
   const shown = inApp && platform === 'linux' && !state.fullScreen

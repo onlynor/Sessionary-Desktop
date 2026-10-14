@@ -72,6 +72,9 @@ func main() {
 			tray = nil
 		}
 		trayReady = false
+		if trayStop != nil {
+			trayStop()
+		}
 		server.Stop()
 		if ui != nil {
 			ui.Close()
