@@ -1,9 +1,10 @@
-# builds
+# builds, staged runtime, generated bindings
 /build/
 /.stage/
+/.mygo/
 /frontend/dist/*
 !/frontend/dist/.gitkeep
-/.mygo/
+/frontend/src/mygo.ts
 node_modules/
 # development runs and screenshots
 /.run/

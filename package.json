@@ -3,7 +3,10 @@
   "private": true,
   "scripts": {
     "dev": "go tool mygo dev",
+    "generate": "go tool mygo generate",
     "build": "go tool mygo build",
-    "typecheck": "go vet ./... && GOOS=darwin go vet ./... && GOOS=windows go vet ./... && bun run --cwd frontend typecheck"
+    "typecheck": "go vet ./... && GOOS=darwin go vet ./... && GOOS=windows go vet ./... && bun run generate && bun run --cwd frontend typecheck",
+    "test": "go test ./... && bun run --cwd frontend test",
+    "smoke": "scripts/test/smoke.sh"
   }
 }

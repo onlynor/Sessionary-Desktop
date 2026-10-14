@@ -3,9 +3,11 @@
   "identifier": "dev.sessionary.desktop",
   "version": "0.1.0",
   "copyright": "\u00a9 2026 Sessionary",
+  "main": "./cmd/sessionary-desktop",
+  "icon": "internal/assets/icon.png",
   "devUrl": "http://127.0.0.1:5174",
   "devCommand": "bun run --cwd frontend dev",
-  "buildCommand": "bun run --cwd frontend build && node scripts/build-backend.mjs && node scripts/fetch-node.mjs",
+  "buildCommand": "bun run --cwd frontend build && node scripts/build/build-backend.mjs && node scripts/build/fetch-node.mjs",
   "bindings": "frontend/src/mygo.ts",
   "out": "build",
   "resources": [

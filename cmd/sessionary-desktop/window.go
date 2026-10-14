@@ -20,29 +20,6 @@ type WindowState struct {
 	Focused    bool `json:"focused"`
 }
 
-// Chrome says what the page draws of the window's frame.
-type Chrome struct {
-	// Buttons is the title buttons the page draws, "start:end" as in
-	// gtk-decoration-layout (e.g. ":minimize,maximize,close"); empty where the
-	// system draws them (macOS, Windows).
-	Buttons string `json:"buttons"`
-}
-
-// Chrome returns what the page draws of the window's frame.
-func (Desktop) Chrome(ctx context.Context) Chrome {
-	return Chrome{Buttons: layoutOf(mygo.CallerWindow(ctx))}
-}
-
-// layouts are worked out once per window, from when it shows (on X11 that means
-// waiting for the window manager to say what it allows), so that the page,
-// which asks as it mounts, rarely waits.
-var layouts sync.Map // *mygo.Window → func() string
-
-func layoutOf(w *mygo.Window) string {
-	f, _ := layouts.LoadOrStore(w, sync.OnceValue(func() string { return buttonLayout(w) }))
-	return f.(func() string)()
-}
-
 // WindowState returns the calling window's state.
 func (Desktop) WindowState(ctx context.Context) WindowState {
 	if w := mygo.CallerWindow(ctx); w != nil {
@@ -65,7 +42,6 @@ func stateOf(w *mygo.Window) WindowState {
 // read once the main loop has moved on, and again a little later for compositors
 // that confirm a change in more than one configure.
 func followState(w *mygo.Window) {
-	w.OnShow(func() { go layoutOf(w) })
 	var mu sync.Mutex
 	last := WindowState{}
 	emit := func() {
@@ -108,9 +84,14 @@ func windowOptions(url string) mygo.WindowOptions {
 		BackgroundColor: "light-dark(#f6f6f4, #161618)",
 		Page:            mygo.PageOptions{TrustedOrigins: []string{url[:len(url)-1]}},
 	}
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		o.TitleBarStyle = mygo.TitleBarHidden // Windows 11's caption buttons over the page
+	case "linux":
+		// frameless: MyGo announces client-side decorations, so nothing adds a title bar of its own, and the
+		// page draws the title buttons (WindowControls.tsx), the same everywhere
+		o.Frameless = true
+		o.TitleBarStyle = ""
 	}
-	chromeOptions(&o)
 	return o
 }

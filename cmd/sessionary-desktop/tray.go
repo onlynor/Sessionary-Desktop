@@ -1,22 +1,22 @@
 package main
 
 import (
-	_ "embed"
 	"log"
 	"runtime"
 
 	"github.com/egoist/mygo"
+
+	"github.com/onlynor/sessionary-desktop/internal/assets"
 )
 
 // Sessionary's tray icon: the mark from the app's own logo, on transparency. macOS gets the black template and
 // tints it to match the menu bar; Linux and Windows get the coloured mark for the notification area. The images
 // are 32x32 — a 16pt icon at 2x, and the size macOS scales to the menu bar's 18pt.
-//
-//go:embed resources/tray.png
-var trayIcon []byte
 
-//go:embed resources/trayTemplate.png
-var trayIconTemplate []byte
+var (
+	trayIcon         = assets.Tray
+	trayIconTemplate = assets.TrayTemplate
+)
 
 var (
 	tray      *mygo.Tray

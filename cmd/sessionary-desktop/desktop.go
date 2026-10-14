@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/url"
-	"os"
 	"runtime"
 
 	"github.com/egoist/mygo"
@@ -27,13 +26,12 @@ type Info struct {
 	Platform string `json:"platform"` // darwin, linux, windows
 	Version  string `json:"version"`
 	Dev      bool   `json:"dev"`
-	Desktop  string `json:"desktop"` // the Linux desktop, e.g. GNOME, KDE, niri
-	Blur     bool   `json:"blur"`    // whether materials can blur what is behind them
+	Blur     bool   `json:"blur"` // whether materials can blur what is behind them
 }
 
 // Info returns facts about the app.
 func (Desktop) Info() Info {
-	return Info{Platform: runtime.GOOS, Version: version, Dev: mygo.IsDev(), Desktop: os.Getenv("XDG_CURRENT_DESKTOP"), Blur: blur}
+	return Info{Platform: runtime.GOOS, Version: version, Dev: mygo.IsDev(), Blur: blur()}
 }
 
 // Backend returns the Sessionary server's status.
@@ -84,3 +82,8 @@ func (Desktop) Attention(ctx context.Context) {
 		w.FlashFrame(true)
 	}
 }
+
+// blur reports whether materials may blur what is behind them. macOS's and Windows's web views composite on the
+// GPU; MyGo turns WebKitGTK's DMA-BUF renderer off everywhere for safety, which also drops backdrop-filter, so on
+// Linux the page draws its materials opaque instead (`data-no-blur`) rather than guessing per GPU or machine.
+func blur() bool { return runtime.GOOS != "linux" }

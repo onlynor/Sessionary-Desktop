@@ -13,6 +13,8 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"github.com/onlynor/sessionary-desktop/frontend"
+	"github.com/onlynor/sessionary-desktop/internal/assets"
 	"github.com/onlynor/sessionary-desktop/internal/backend"
 	"github.com/onlynor/sessionary-desktop/internal/uiserver"
 )
@@ -21,7 +23,6 @@ import (
 var version = "dev"
 
 var (
-	blur   bool // the web view draws backdrop-filter (see configureRenderer)
 	server *backend.Backend
 	ui     *uiserver.Server
 	main_  *mygo.Window
@@ -29,7 +30,6 @@ var (
 
 func main() {
 	mygo.App.SetName("Sessionary")
-	blur = configureRenderer()
 	if !mygo.App.RequestSingleInstanceLock() {
 		return // the running instance comes to the front
 	}
@@ -41,7 +41,7 @@ func main() {
 		var err error
 		ui, err = uiserver.Start(uiserver.Options{
 			Backend: server.URL,
-			Files:   frontendFiles(),
+			Files:   frontend.Files(),
 			DevURL:  devURL(),
 		})
 		if err != nil {
@@ -88,7 +88,7 @@ func main() {
 func openMain() {
 	main_ = mygo.NewWindow(windowOptions(ui.URL + "/"))
 	win := main_
-	win.SetIcon(appIcon) // the taskbar's icon for a build run without its desktop entry (Linux, Windows)
+	win.SetIcon(assets.Icon) // the taskbar's icon for a build run without its desktop entry (Linux, Windows)
 	win.OnReadyToShow(win.Show)
 	followState(win)
 	page := win.Page()
