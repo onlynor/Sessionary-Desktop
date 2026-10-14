@@ -7,6 +7,9 @@
     drive.py webtheme paper|ember|graphite   # Sessionary's own theme setting
     drive.py size 1440 900                   # resize the window
     drive.py shot out.png                    # capture the page
+    drive.py window hide|show|close|quit|state
+                                         # window actions; close hides to the tray
+    drive.py tray                            # whether the tray is installed, and whether the window shows
     drive.py status                          # the backend's status
 """
 import json, os, socket, sys, time
@@ -64,6 +67,8 @@ def main(argv):
             main(['shot', f'{prefix}-{name}.png'])
     elif cmd == 'window':
         print(json.dumps(call({'window': args[0] if args else 'state'}), indent=1))
+    elif cmd == 'tray':
+        print(json.dumps(call({'tray': True}), indent=1))
     elif cmd == 'status':
         print(json.dumps(call({'status': True}), indent=1))
     elif cmd == 'wait-ready':

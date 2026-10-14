@@ -45,7 +45,8 @@ type driveReq struct {
 	Theme  string `json:"theme"`  // light, dark or system: the appearance
 	Wait   int    `json:"wait"`   // milliseconds to wait first
 	Status bool   `json:"status"` // the backend's status
-	Window string `json:"window"` // "state", or an action: minimize, maximize, unmaximize, fullscreen, unfullscreen, close
+	Tray   bool   `json:"tray"`   // whether the tray is installed, and whether the window shows
+	Window string `json:"window"` // "state", or an action: minimize, maximize, unmaximize, fullscreen, unfullscreen, close, hide, show, quit
 }
 
 func serveDrive(c net.Conn) {
@@ -79,6 +80,8 @@ func drive(req driveReq) (any, error) {
 	switch {
 	case req.Status:
 		return server.Status(), nil
+	case req.Tray:
+		return map[string]any{"installed": trayInstalled(), "visible": w.IsVisible()}, nil
 	case req.Window != "":
 		switch req.Window {
 		case "minimize":
@@ -93,7 +96,15 @@ func drive(req driveReq) (any, error) {
 			w.SetFullScreen(false)
 		case "close":
 			w.Close()
-			return nil, nil
+			return map[string]any{"visible": w.IsVisible()}, nil
+		case "hide":
+			hideMain()
+		case "show":
+			showMain()
+		case "quit":
+			// answer first, then quit, so the caller sees the reply before the socket goes
+			go func() { time.Sleep(150 * time.Millisecond); mygo.App.Quit() }()
+			return map[string]any{"quitting": true}, nil
 		}
 		time.Sleep(300 * time.Millisecond)
 		b := w.Bounds()

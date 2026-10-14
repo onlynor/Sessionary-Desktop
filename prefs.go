@@ -27,17 +27,40 @@ func prefsPath() string {
 	return filepath.Join(dir, "prefs.json")
 }
 
+// readPrefs reads a settings file, or an empty map when there is none or it is unreadable.
+func readPrefs(path string) map[string]string {
+	values := map[string]string{}
+	if path == "" {
+		return values
+	}
+	if b, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(b, &values)
+	}
+	return values
+}
+
+// writePrefs writes a settings file atomically: a temp file moved into place, so a crash cannot truncate it.
+func writePrefs(path string, values map[string]string) error {
+	if path == "" {
+		return nil
+	}
+	b, err := json.MarshalIndent(values, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
 func loadPrefsLocked() {
 	if prefs.loaded {
 		return
 	}
 	prefs.loaded = true
-	prefs.values = map[string]string{}
-	if p := prefsPath(); p != "" {
-		if b, err := os.ReadFile(p); err == nil {
-			_ = json.Unmarshal(b, &prefs.values)
-		}
-	}
+	prefs.values = readPrefs(prefsPath())
 }
 
 // Prefs returns the page's saved settings.
@@ -65,16 +88,5 @@ func (Desktop) SavePrefs(changes map[string]*string) error {
 		}
 	}
 	p := prefsPath()
-	if p == "" {
-		return nil
-	}
-	b, err := json.MarshalIndent(prefs.values, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp := p + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, p)
+	return writePrefs(p, prefs.values)
 }

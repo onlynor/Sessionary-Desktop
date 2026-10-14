@@ -4,14 +4,16 @@ Sessionary — the control center for your AI coding agents — as a desktop app
 [MyGo](https://github.com/egoist/mygo). Linux first; the boundaries are drawn for macOS and Windows.
 
 It is the whole Sessionary product (Projects, Sessions, live Chat, Model Control, Usage, Machines, Terminal,
-Monitor) in a real application window: a flush source-list sidebar, a title-bar toolbar with back/forward, system
-appearance, system notifications, its own server lifecycle, and none of a browser's chrome or behaviour.
+Monitor) in a real application window: a flush source-list sidebar with the web client's own navigation, a
+title-bar toolbar with back/forward, system appearance, system notifications, a system tray, its own server
+lifecycle, and none of a browser's chrome or behaviour.
 
 ## Architecture
 
 ```
 ┌──────────────────────── Sessionary Desktop (one Go binary, MyGo) ────────────────────────┐
 │ main.go        app lifecycle, the window, single instance, menus (macOS), quitting        │
+│ tray.go        the tray icon and menu; the window's close hides, quitting is explicit        │
 │ desktop.go     services the page calls (typed, generated into frontend/src/mygo.ts)       │
 │ prefs.go       the page's settings, kept in the user data dir                            │
 │ renderer_*.go  WebKitGTK renderer choice (blur where the GPU path is safe)               │
@@ -52,7 +54,7 @@ desktop layer on top:
 | `src/desktop/Launch.tsx` | launch screen; failure view with Retry and the server's output |
 | `src/desktop/runtime.ts` | MyGo runtime glue: prefs bridge, window background follows the theme, menu commands, system notifications |
 | `src/desktop/i18n.ts` | the layer's strings, merged into Sessionary's dictionary (en, 简体, 繁體, 日本語) |
-| `src/overrides/<path>` | replaces `web/src/<path>` wherever the client imports it: `Nav.tsx` (the sidebar as a source list) and `MachinePage.tsx` (the agents' display order). Keep overrides rare; `test/overrides.test.ts` guards them against upstream drift |
+| `src/overrides/<path>` | replaces `web/src/<path>` wherever the client imports it: `Nav.tsx` (the web client's sidebar, with this platform's search shortcut and a marker class the layer finds it by) and `MachinePage.tsx` (the agents' display order). Keep overrides rare; `test/overrides.test.ts` undoes each override's documented changes and compares it with the web client's file |
 
 React and every package resolve from Sessionary's own install, so there is one copy of each.
 
@@ -72,7 +74,7 @@ Scripted runs, for screenshots and checks (development builds only):
 
 ```sh
 scripts/run.sh                       # build, start, wait until the server answers (floats the window on niri)
-scripts/drive.py go '#/models'       # navigate · eval · theme · size · shot · status
+scripts/drive.py go '#/models'       # navigate · eval · theme · size · shot · tray · status
 scripts/drive.py tour .shots/x ember # every main surface, one PNG each
 ```
 
@@ -167,6 +169,33 @@ outer 5 px resize, F11 toggles full screen.
 Why: MyGo's hidden title bar shows GTK's buttons only when the compositor does not prefer server-side decorations;
 niri prefers them but draws no title bar (no buttons at all), KWin draws one (a title bar on top of the page's).
 
+## Window, tray and quitting
+
+The window's close button **hides the window**; the app keeps running — and keeps its server, so Model Control's
+gateway keeps answering — in the menu bar (macOS) or the notification area (Linux, Windows). The tray's menu brings
+it back, puts it away again, or quits for good; the macOS app menu, `Ctrl Q` and the launch screen's Quit do the
+same. The rule is one line: **with a tray, closing only hides and quitting always closes; without one, closing quits
+as it always did**, so a window can never be left invisible with no way back. A real quit sets a flag before the
+window is closed, so the close handler lets it through, the tray is destroyed, and the server's process group is
+stopped. Activating the app (the Dock, the taskbar, a second launch) restores the **same** window — there is never a
+second one.
+
+The icon is Sessionary's own mark: the coloured logo on Linux and Windows, and a black template on macOS (tinted for
+light and dark menu bars). It is handed to MyGo's native tray (`mygo.NewTray`), so it is a real StatusNotifierItem /
+NSStatusItem, not an element drawn in the page. Platform notes:
+
+- **Linux** shows a tray only with `libayatana-appindicator3` (or `libappindicator3`) and a StatusNotifierItem host
+  (a bar such as noctalia, waybar or the GNOME AppIndicator extension). Without the library `NewTray` fails and the
+  app runs as before, without a tray (and closing quits). Without a host the icon is registered but nothing displays
+  it; relaunching the app then restores the window (single instance). The menu works through the host's dbusmenu; a
+  click on the icon itself is not delivered (AppIndicator has no click events).
+- **macOS** keeps the Dock icon as well, so both the Dock and the menu bar restore the window; the app is not an
+  accessory (no `SetActivationPolicy`).
+- **Windows** uses the notification area (left- and right-clicks both open the menu).
+
+`scripts/drive.py tray` reports whether the tray is installed, `window hide|show|quit` exercises the lifecycle, and
+`go test ./...` covers the icon, the menu and the close-versus-quit rule (`tray_test.go`).
+
 ## Linux compatibility
 
 Pragmatic: what CI and the developer machine run is tested; the rest is expected to work and fixed when it blocks.
@@ -231,4 +260,4 @@ else one. The order lives in `overrides/MachinePage.tsx`, the web client's file 
 
 - KDE Plasma run, macOS and Windows smoke runs (CI builds them; only Linux is smoke-tested).
 - Windows: agents started by the server are not stopped with it (no job object yet).
-- macOS: vibrancy sidebar, signing and notarization. A preferences window, auto-update, a tray item for running agents.
+- macOS: vibrancy sidebar, signing and notarization. A preferences window, auto-update, a tray badge for running agents.

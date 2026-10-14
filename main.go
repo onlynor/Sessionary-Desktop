@@ -50,6 +50,7 @@ func main() {
 		server.Start()
 		openMain()
 		installMenu()
+		installTray()
 		startDrive()
 		startSmoke()
 	})
@@ -63,7 +64,14 @@ func main() {
 			mygo.App.Quit()
 		}
 	})
+	// a quit is not a close: the window's close button only hides it, so quitting must say so first
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { quitting = true })
 	mygo.App.OnQuit(func() {
+		if tray != nil {
+			tray.Destroy()
+			tray = nil
+		}
+		trayReady = false
 		server.Stop()
 		if ui != nil {
 			ui.Close()
@@ -106,6 +114,14 @@ func openMain() {
 		page.Reload()
 	})
 	win.OnClosed(func() { main_ = nil })
+	// Closing the window hides it: the app keeps running in the tray (its server keeps serving the gateway).
+	// Quitting — the tray, the menu, Ctrl+Q — closes it for real, because `quitting` is set first.
+	win.OnClose(func(e *mygo.CloseEvent) {
+		if shouldHideOnClose() {
+			e.PreventDefault()
+			win.Hide()
+		}
+	})
 }
 
 func showMain() {
