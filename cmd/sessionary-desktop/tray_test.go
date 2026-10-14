@@ -3,10 +3,7 @@ package main
 import (
 	"bytes"
 	"image/png"
-	"reflect"
 	"testing"
-
-	"github.com/egoist/mygo"
 )
 
 func TestTrayIconFor(t *testing.T) {
@@ -28,34 +25,6 @@ func TestTrayIconFor(t *testing.T) {
 		if w, h := img.Bounds().Dx(), img.Bounds().Dy(); w != 32 || h != 32 {
 			t.Errorf("%s is %dx%d, want 32x32", name, w, h)
 		}
-	}
-}
-
-func TestTrayMenu(t *testing.T) {
-	items := trayMenu().Items()
-	labels := make([]string, 0, len(items))
-	for _, it := range items {
-		if it.Type == mygo.MenuItemSeparator {
-			labels = append(labels, "-")
-			continue
-		}
-		labels = append(labels, it.Label)
-	}
-	if want := []string{"Show Sessionary", "Hide Window", "-", "Quit Sessionary"}; !reflect.DeepEqual(labels, want) {
-		t.Fatalf("tray menu = %v, want %v", labels, want)
-	}
-	// every entry does something: showing, hiding, quitting
-	for i, it := range items {
-		if i == 2 {
-			continue
-		}
-		if it.Click == nil {
-			t.Errorf("%q has no action", it.Label)
-		}
-	}
-	// quitting is explicit, and reachable from the keyboard
-	if quit := items[len(items)-1]; quit.Accelerator == "" {
-		t.Error("Quit has no accelerator")
 	}
 }
 

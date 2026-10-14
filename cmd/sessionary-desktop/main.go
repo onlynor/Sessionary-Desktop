@@ -116,7 +116,10 @@ func openMain() {
 		log.Println("page process gone:", reason)
 		page.Reload()
 	})
-	win.OnClosed(func() { main_ = nil })
+	win.OnClosed(func() { main_ = nil; refreshTray() })
+	// the tray's Show/Hide entry says what the window is doing
+	win.OnShow(refreshTray)
+	win.OnHide(refreshTray)
 	// Closing the window hides it: the app keeps running in the tray (its server keeps serving the gateway).
 	// Quitting — the tray, the menu, Ctrl+Q — closes it for real, because `quitting` is set first.
 	win.OnClose(func(e *mygo.CloseEvent) {

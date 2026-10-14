@@ -41,7 +41,7 @@ func installTray() {
 	t, err := mygo.NewTray(mygo.TrayOptions{
 		Icon:           icon,
 		IconIsTemplate: template,
-		ToolTip:        "Sessionary",
+		ToolTip:        currentTrayModel(false).label("tooltip"),
 		Menu:           trayMenu(),
 	})
 	if err != nil {
@@ -75,14 +75,44 @@ func trayIconFor(goos string) (icon []byte, template bool) {
 	return trayIcon, false
 }
 
-// trayMenu is the tray's menu: bring the window back, put it away, or quit.
+// trayMenu is the tray's menu for the window's state now.
 func trayMenu() *mygo.Menu {
-	return mygo.NewMenu([]*mygo.MenuItem{
-		{Label: "Show Sessionary", Click: func(*mygo.MenuItem, *mygo.Window) { showMain() }},
-		{Label: "Hide Window", Click: func(*mygo.MenuItem, *mygo.Window) { hideMain() }},
-		mygo.Separator(),
-		{Label: "Quit Sessionary", Accelerator: "CmdOrCtrl+Q", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
-	})
+	visible := main_ != nil && main_.IsVisible()
+	return mygo.NewMenu(trayItems(currentTrayModel(visible), trayActions{
+		toggle: func() {
+			if main_ != nil && main_.IsVisible() {
+				hideMain()
+			} else {
+				showMain()
+			}
+		},
+		command: func(cmd string) {
+			showMain() // reveal and focus the window before asking the page
+			if main_ != nil {
+				_ = Command.Emit(main_, cmd)
+			}
+		},
+		about: showAbout,
+		quit:  func() { mygo.App.Quit() },
+	}))
+}
+
+// refreshTray rebuilds the menu from the current words, sessions and window state, and the tooltip.
+func refreshTray() {
+	if tray == nil {
+		return
+	}
+	m := currentTrayModel(main_ != nil && main_.IsVisible())
+	tray.SetMenu(trayMenu())
+	tray.SetToolTip(m.label("tooltip"))
+}
+
+// showAbout says what is installed, in the system's own message box.
+func showAbout() {
+	go func() {
+		m := currentTrayModel(true)
+		_, _ = mygo.Dialog.Message(mygo.MessageOptions{Title: m.label("about"), Message: "Sessionary " + version})
+	}()
 }
 
 // hideMain puts the window away without closing it: the app (and the server it runs) stays up, reachable from
