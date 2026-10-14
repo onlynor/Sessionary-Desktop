@@ -1,3 +1,16 @@
+/**
+ * The desktop's sidebar: the web client's navigation (`web/src/Nav.tsx`), which is the source of truth for the
+ * shared structure and its design — the brand row with the collapse control on the right, search, Home and
+ * Machines, the machine switcher, the Workspace group (Agents, Projects, Sessions, Terminal, Monitor), Model
+ * Control (Models, Routing, Gateway, Usage), and the foot (Trash, Nodes, Notifications, Settings) with the
+ * machines' status. The desktop keeps it byte for byte, with two deliberate differences:
+ *
+ * - the search shortcut is written for this platform (⌘K on macOS, Ctrl K elsewhere) rather than the web's Ctrl K;
+ * - the `dt-nav` marker class lets the desktop layer (its stylesheet, the smoke test) find the sidebar.
+ *
+ * test/overrides.test.ts undoes those two changes and compares the rest with the web client's file, so a change
+ * upstream is carried over rather than silently drifted from.
+ */
 import { useState } from 'react'
 import { t, useT } from '@web/i18n'
 import { Icon } from '@web/Icon'
@@ -8,16 +21,7 @@ import { Popover } from '@web/SettingsMenu'
 import { MachineIcon, StatusDot, machineTarget } from '@web/ui'
 import { useControl } from '@web/control'
 
-/**
- * The desktop's sidebar: the web client's navigation as a source list.
- *
- * Differences from the web's (`web/src/Nav.tsx`), on purpose:
- * - no brand row: the window has a title bar and the app has an icon; the row is the title bar, holding the toggle;
- * - Trash belongs to the machine whose sessions it holds, so it sits in that machine's group;
- * - Nodes are machines, reached from Machines and the machine switcher, not a row of their own;
- * - notifications and settings are tools of the window, not places: one quiet row at the foot, with the status.
- * Keep the props and the places it links to in step with the web's.
- */
+/** Which machine the scoped entries (Agents, Projects, …) act on: the open one, else the last one used. */
 export function Nav({ route, machineId, collapsed, onCollapse, onPalette, onSettings, trashCount }: {
   route: Route; machineId: string; collapsed: boolean; onCollapse: () => void; onPalette: () => void; onSettings: (anchor: HTMLElement) => void; trashCount: number
 }) {
@@ -26,6 +30,7 @@ export function Nav({ route, machineId, collapsed, onCollapse, onPalette, onSett
   const [pick, setPick] = useState<{ left: number; top: number }>()
   const notify = useNotify()
   const control = useControl()
+  // the gateway is answering someone right now
   const live = (() => { const open = new Set<string>(); for (const e of control.events) { if (e.phase === 'answering' || e.phase === 'trying') open.add(e.id); else open.delete(e.id) } return open.size > 0 })()
   const [bell, setBell] = useState<{ left: number; bottom: number }>()
   const machine = machines.find((m) => m.id === machineId) ?? machines[0]
@@ -38,13 +43,15 @@ export function Nav({ route, machineId, collapsed, onCollapse, onPalette, onSett
       <Icon name={icon} size={collapsed ? 18 : 16} /><span className="nav-label">{label}</span>{meta != null && <span className="meta">{meta}</span>}
     </a>
   )
-  const onMachine = (id: string) => (route.page === 'machine' || route.page === 'agent' || route.page === 'session') && (route as { machine: string }).machine === id
-  const scoped = (tabId: MachineTab, icon: string, label: string, meta?: React.ReactNode) => item(tabId, icon, label, href.machine(machine?.id ?? 'local', tabId), tab === tabId && onMachine(machine?.id ?? ''), meta)
+  const scoped = (tabId: MachineTab, icon: string, label: string, meta?: React.ReactNode) => item(tabId, icon, label, href.machine(machine?.id ?? 'local', tabId), tab === tabId && route.page !== 'home' && (route.page === 'machine' || route.page === 'agent' || route.page === 'session') && (route as { machine: string }).machine === machine?.id, meta)
+  // something is waiting on the machines that are not open
   const elsewhere = machines.filter((m) => m.id !== machine?.id).reduce((n, m) => n + notify.unreadFor(m.id), 0)
 
   return (
     <nav className="nav dt-nav" aria-label={t('Navigation')}>
       <div className="nav-head">
+        <img className="brand-mark" src="/favicon-32.png" alt="" width={24} height={24} />
+        <span className="nav-label brand-name">Sessionary</span>
         <button className="tb-btn nav-collapse" onClick={onCollapse} title={`${collapsed ? t('Expand sidebar') : t('Collapse sidebar')}  [`} aria-label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}><Icon name={collapsed ? 'sidebar-open' : 'sidebar'} /></button>
       </div>
 
@@ -54,16 +61,17 @@ export function Nav({ route, machineId, collapsed, onCollapse, onPalette, onSett
 
       <div className="nav-group">
         {item('home', 'home', t('Home'), href.home, route.page === 'home')}
-        {item('machines', 'layers', t('Machines'), href.machines, route.page === 'machines' || route.page === 'nodes', machines.length)}
+        {item('machines', 'layers', t('Machines'), href.machines, route.page === 'machines', machines.length)}
       </div>
 
       {machine && (
         <div className="nav-group nav-machine">
+          <div className="nav-section nav-label">{t('Workspace')}</div>
           <button className="machine-switch" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setPick(pick ? undefined : { left: r.left, top: r.bottom + 6 }) }}
             aria-haspopup="menu" aria-expanded={!!pick} title={collapsed ? machine.name : t('Switch machine')}>
-            <MachineIcon machine={machine} size={collapsed ? 28 : 24} />
+            <MachineIcon machine={machine} size={collapsed ? 30 : 28} />
             <span className="nav-label ms-text"><span className="ms-name">{machine.name}</span><span className="ms-sub"><StatusDot state={machine.state} />{machineTarget(machine)}</span></span>
-            <span className="nav-label ms-chev">{elsewhere > 0 && <span className="alert-dot" title={t('Something on another machine needs you')} />}<Icon name="updown" size={13} /></span>
+            <span className="nav-label ms-chev">{elsewhere > 0 && <span className="alert-dot" title={t('Something on another machine needs you')} />}<Icon name="updown" size={14} /></span>
             {elsewhere > 0 && <span className="alert-dot corner" aria-hidden="true" />}
           </button>
           {scoped('agents', 'task', t('Agents'))}
@@ -71,10 +79,10 @@ export function Nav({ route, machineId, collapsed, onCollapse, onPalette, onSett
           {scoped('sessions', 'message', t('Sessions'))}
           {scoped('terminal', 'terminal', t('Terminal'), machine && notify.unreadFor(machine.id) > 0 ? <span className="alert-dot" title={t('Something here needs you')} /> : undefined)}
           {scoped('monitor', 'activity', t('Monitor'))}
-          {scoped('trash', 'trash', t('Trash'), trashCount > 0 ? trashCount : undefined)}
         </div>
       )}
 
+      {/* this computer's model routing: first-class, not a setting */}
       <div className="nav-group">
         <div className="nav-section nav-label">{t('Model Control')}</div>
         <span className="nav-sep" aria-hidden="true" />
@@ -85,17 +93,14 @@ export function Nav({ route, machineId, collapsed, onCollapse, onPalette, onSett
       </div>
 
       <span className="grow" />
-      <div className="dt-nav-foot">
-        <a className="dt-status nav-label" href={href.machines} title={t('Machines')}>
-          <span className={`dot ${online === machines.length ? 'ok' : 'warn'}`} />
-          <span className="ellip">{t('{n} of {total} machines online', { n: online, total: machines.length })}</span>
-        </a>
-        <button className={`tb-btn dt-foot-btn ${notify.unread > 0 ? 'alert' : ''}`} aria-haspopup="menu" title={t('Notifications')} aria-label={t('Notifications')}
-          onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setBell(bell ? undefined : { left: r.left, bottom: innerHeight - r.top + 6 }) }}>
-          <Icon name={notify.settings.enabled ? 'bell' : 'bell-off'} size={16} />
-          {notify.unread > 0 && <span className="dt-badge">{notify.unread > 9 ? '9+' : notify.unread}</span>}
+      <div className="nav-group nav-foot">
+        {item('trash', 'trash', t('Trash'), href.machine(machine?.id ?? 'local', 'trash'), route.page === 'machine' && route.tab === 'trash', trashCount > 0 ? trashCount : undefined)}
+        {item('nodes', 'server', t('Nodes'), href.nodes(), route.page === 'nodes')}
+        <button className={`nav-i ${notify.unread > 0 ? 'alert' : ''}`} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setBell(bell ? undefined : { left: r.left, bottom: innerHeight - r.top + 6 }) }} title={collapsed ? t('Notifications') : undefined} aria-haspopup="menu">
+          <Icon name={notify.settings.enabled ? 'bell' : 'bell-off'} size={collapsed ? 18 : 16} /><span className="nav-label">{t('Notifications')}</span>{notify.unread > 0 && <span className="meta badge">{notify.unread > 9 ? '9+' : notify.unread}</span>}
         </button>
-        <button className="tb-btn dt-foot-btn" onClick={(e) => onSettings(e.currentTarget)} title={t('Settings')} aria-label={t('Settings')}><Icon name="settings" size={16} /></button>
+        <button className="nav-i" onClick={(e) => onSettings(e.currentTarget)} title={collapsed ? t('Settings') : undefined}><Icon name="settings" size={collapsed ? 18 : 16} /><span className="nav-label">{t('Settings')}</span></button>
+        <div className="nav-status nav-label"><span className="dot ok" />{t('{n} of {total} machines online', { n: online, total: machines.length })}</div>
       </div>
 
       {bell && <NotifyPanel at={bell} onClose={() => setBell(undefined)} />}

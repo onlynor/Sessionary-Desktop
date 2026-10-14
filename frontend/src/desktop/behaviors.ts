@@ -1,5 +1,5 @@
 import { currentWindow } from 'mygo-runtime'
-import { inApp } from './runtime'
+import { inApp, openSettings, quitApp } from './runtime'
 
 /**
  * What makes the page behave like an app's window rather than a browser tab: no browser context menu, no
@@ -38,7 +38,9 @@ export function installBehaviors(opts: { dev: boolean }) {
     // the shortcuts a menu bar would carry, where there is none (Linux, Windows); macOS's menu sends the same
     if (mod && !e.altKey && !e.shiftKey) {
       const go = (h: string) => { e.preventDefault(); location.hash = h }
-      if (e.key === ',') { e.preventDefault(); document.querySelector<HTMLButtonElement>('.dt-foot-btn:last-child')?.click() }
+      if (e.key === ',') { e.preventDefault(); openSettings() }
+      // an explicit quit, where there is no menu bar to carry one (the tray also offers it)
+      else if (e.key === 'q' || e.key === 'Q') { e.preventDefault(); quitApp() }
       else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); dispatchEvent(new CustomEvent('sessionary:new-session', { detail: {} })) }
       else if (e.key === '1') go('#/')
       else if (e.key === '2') go('#/m/local/projects')

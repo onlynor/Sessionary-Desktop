@@ -77,7 +77,18 @@ export async function backendStatus(): Promise<Status> {
 }
 export const onBackend = (fn: (s: Status) => void) => (inApp ? events.backend.on(fn) : () => {})
 
+/** Quit the app for good — the tray, the macOS app menu and Ctrl Q all lead here. */
+export const quitApp = () => {
+  if (inApp) Desktop.quit()
+}
+
 // ---------- what the app's menus and the system ask of the page ----------
+/**
+ * The client's own Settings entry, wherever it draws it: the foot of the sidebar (web/src/Nav.tsx). The app's menu
+ * bar and Ctrl+, open it here so that both platforms reach the same menu, not a second settings system.
+ */
+export const openSettings = () => document.querySelector<HTMLButtonElement>('.nav-foot button:last-of-type')?.click()
+
 const ROUTES: Record<string, string> = {
   home: '#/',
   projects: '#/m/local/projects',
@@ -94,7 +105,7 @@ export function listenForCommands() {
     else if (cmd.startsWith('go:')) location.hash = ROUTES[cmd.slice(3)] ?? cmd.slice(3)
     else if (cmd === 'sidebar') dispatchEvent(new KeyboardEvent('keydown', { key: '[' }))
     else if (cmd === 'new-session') dispatchEvent(new CustomEvent('sessionary:new-session', { detail: {} }))
-    else if (cmd === 'settings') document.querySelector<HTMLButtonElement>('.dt-foot-btn:last-child')?.click()
+    else if (cmd === 'settings') openSettings()
     else dispatchEvent(new CustomEvent('sessionary-desktop:' + cmd))
   })
 }

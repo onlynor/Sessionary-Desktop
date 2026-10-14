@@ -5,7 +5,7 @@
    does not need to pretend: it has edges, a title bar and a system around it. So here:
 
      window      the sidebar is the window's own source list, flush with its edges, full height
-     title bar   the top 52px of the window: the sidebar's toggle on the left, the page's toolbar on the right;
+     title bar   the top 52px of the window: the sidebar's brand row leads it, the page's toolbar follows;
                  both move the window; window controls sit inside it where the system puts them
      toolbar     transparent over the top of a page, a material with a hairline once content scrolls under it
      canvas      one quiet, flat colour; no ambient gradients
@@ -118,7 +118,7 @@ html.desktop .nav-head {
   background: var(--dt-side);
   --app-region: drag;
 }
-html.desktop .brand-mark, html.desktop .brand-name { display: none; }
+/* the brand row leads the title bar: the mark and the wordmark, the collapse control at the trailing end */
 html.desktop .nav-collapse { margin-left: auto; color: var(--text-3); }
 html.desktop .nav-collapse:hover { color: var(--text); }
 
@@ -153,6 +153,8 @@ html.desktop .nav-status .dot { width: 6px; height: 6px; }
 /* collapsed: a rail of symbols under the title bar */
 html.desktop .window[data-side="collapsed"]:not(.compact) .nav { padding: 0 0 var(--side-pad); }
 html.desktop .window[data-side="collapsed"]:not(.compact) .nav-head { flex-direction: row; justify-content: center; height: var(--tb-h); margin: 0; padding: 0; }
+/* the rail has room for the toggle only: the wordmark and the mark would sit under the title buttons */
+html.desktop .window[data-side="collapsed"]:not(.compact) .brand-mark, html.desktop .window[data-side="collapsed"]:not(.compact) .brand-name { display: none; }
 html.desktop .window[data-side="collapsed"]:not(.compact) .nav-collapse { margin: 0; }
 html.desktop .window[data-side="collapsed"]:not(.compact) .nav-i, html.desktop .window[data-side="collapsed"]:not(.compact) .nav-search { width: 36px; height: 32px; }
 
@@ -270,16 +272,7 @@ html.desktop:has(.overlay) .dt-navbtns { opacity: 0.35; pointer-events: none; }
 /* below 760px the web client floats its own sidebar button where these would be */
 html.desktop:has(.window.compact) .dt-navbtns { left: 54px; }
 
-/* ---------- the sidebar's foot: status, then the window's tools ---------- */
-html.desktop .dt-nav-foot { display: flex; align-items: center; gap: 2px; min-height: 32px; margin: 0 -2px; padding-top: 6px; box-shadow: 0 -0.5px 0 var(--hairline); flex: none; }
-html.desktop .dt-status { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border-radius: 7px; font-size: 11.5px; color: var(--text-3); }
-html.desktop .dt-status:hover { background: rgb(var(--tint) / 0.045); color: var(--text-2); }
-html.desktop .dt-status .dot { width: 6px; height: 6px; }
-html.desktop .dt-foot-btn { position: relative; width: 30px; height: 28px; color: var(--text-3); }
-html.desktop .dt-foot-btn:hover { color: var(--text); }
-html.desktop .dt-foot-btn.alert { color: var(--text); }
-html.desktop .dt-badge { position: absolute; top: 1px; right: 0; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; display: grid; place-items: center; font: 600 9.5px/1 var(--sans); color: #fff; background: var(--error); box-shadow: 0 0 0 1.5px var(--dt-side); font-variant-numeric: tabular-nums; }
-html.desktop .window[data-side="collapsed"]:not(.compact) .dt-nav-foot { flex-direction: column; margin: 0; gap: 4px; box-shadow: none; }
+/* ---------- the sidebar's foot: Trash, Nodes, Notifications and Settings, then the machines' status ---------- */
 html.desktop .nav-machine { margin-top: 6px; }
 
 /* ---------- groups of figures: one strip, not a row of tiles ---------- */
