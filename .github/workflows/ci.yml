@@ -102,7 +102,7 @@ jobs:
         with:
           go-version-file: desktop/go.mod
           cache-dependency-path: desktop/go.sum
-      # Node.js runs the build tools (tsup, Vite); the app ships its own copy (scripts/fetch-node.mjs)
+      # Node.js runs the build tools (tsup, Vite); the app ships its own copy (scripts/build/fetch-node.mjs)
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -116,6 +116,9 @@ jobs:
           pnpm install --frozen-lockfile
       - name: Install the desktop frontend's packages
         run: bun install --cwd frontend --frozen-lockfile
+      # the typed bindings of the app's Go services (not committed)
+      - name: Generate the bindings
+        run: go tool mygo generate
       - name: Type-check
         run: bun run --cwd frontend typecheck
       # the agents' display order, and the overrides kept in step with the web client
@@ -125,7 +128,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/sessionary-desktop/node
-          key: node-runtime-${{ matrix.platform }}-${{ hashFiles('desktop/scripts/fetch-node.mjs') }}
+          key: node-runtime-${{ matrix.platform }}-${{ hashFiles('desktop/scripts/build/fetch-node.mjs') }}
       - name: Build and package
         run: go tool mygo build
       - name: Smoke-test the binary
@@ -133,12 +136,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libgtk-3-0t64 libwebkit2gtk-4.1-0 xvfb xauth dbus
-          scripts/smoke.sh build/linux-*/sessionary "$RUNNER_TEMP/smoke"
+          scripts/test/smoke.sh build/linux-*/sessionary "$RUNNER_TEMP/smoke"
       - name: Smoke-test the .deb on a clean Ubuntu
         if: runner.os == 'Linux'
-        run: scripts/smoke-deb.sh build/linux-*/sessionary_*.deb
+        run: scripts/test/smoke-deb.sh build/linux-*/sessionary_*.deb
+      # macOS and Windows runners have a desktop session: run the packaged app once (best effort until proven there)
+      - name: Smoke-test the app (macOS)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: scripts/test/smoke-native.sh "$(find build -path '*.app/Contents/MacOS/*' -type f | head -1)" "$RUNNER_TEMP/smoke"
+      - name: Smoke-test the app (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: scripts/test/smoke-native.sh "$(find build -name 'sessionary*.exe' ! -iname '*setup*' | head -1)" "$RUNNER_TEMP/smoke"
       - name: Upload the smoke report
-        if: always() && runner.os == 'Linux'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: smoke-${{ strategy.job-index }}

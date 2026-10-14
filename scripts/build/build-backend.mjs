@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const root = path.join(here, '..')
+const root = path.join(here, '../..')
 const sessionary = path.resolve(process.env.SESSIONARY_DIR ?? path.join(root, '../Sessionary'))
 const require = createRequire(path.join(sessionary, 'package.json'))
 const { build } = await import(require.resolve('tsup'))

@@ -4,7 +4,7 @@
 // truncated download fails the build. Archives are cached in ~/.cache/sessionary-desktop/node (XDG_CACHE_HOME), so
 // only the first build downloads. Debug symbols are stripped where `strip` exists (about 18 MB off the binary; the dynamic symbol table addons link against stays).
 //
-//   node scripts/fetch-node.mjs [os/arch]     default: this machine's, e.g. linux/amd64
+//   node scripts/build/fetch-node.mjs [os/arch]     default: this machine's, e.g. linux/amd64
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -23,7 +23,7 @@ const ARCHIVES = {
   'windows/arm64': ['win-arm64.zip', '8779b1bde1d39f8d420e3b57aa657b39891af434d3de44a919044cec06785921'],
 }
 
-const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const goArch = { x64: 'amd64', arm64: 'arm64' }[process.arch] ?? process.arch
 const goOS = { win32: 'windows' }[process.platform] ?? process.platform
 const target = process.argv[2] ?? `${goOS}/${goArch}`

@@ -1,7 +1,7 @@
 # Sessionary Desktop
 
 Sessionary — the control center for your AI coding agents — as a desktop application, built with
-[MyGo](https://github.com/egoist/mygo). Linux first; the boundaries are drawn for macOS and Windows.
+[MyGo](https://github.com/egoist/mygo). Built and packaged for Linux, macOS and Windows from one codebase.
 
 It is the whole Sessionary product (Projects, Sessions, live Chat, Model Control, Usage, Machines, Terminal,
 Monitor) in a real application window: a flush source-list sidebar with the web client's own navigation, a
@@ -12,20 +12,31 @@ lifecycle, and none of a browser's chrome or behaviour.
 
 ```
 ┌──────────────────────── Sessionary Desktop (one Go binary, MyGo) ────────────────────────┐
-│ main.go        app lifecycle, the window, single instance, menus (macOS), quitting        │
-│ tray.go        the tray icon and menu; the window's close hides, quitting is explicit        │
-│ desktop.go     services the page calls (typed, generated into frontend/src/mygo.ts)       │
-│ prefs.go       the page's settings, kept in the user data dir                            │
-│ renderer_*.go  WebKitGTK renderer choice (blur where the GPU path is safe)               │
-│ supervise.go   where the bundled runtime and server are; dev vs. production behaviour     │
-│ internal/backend   supervise the server: start, health, restart, give up, stop          │
-│ internal/uiserver  loopback origin: the embedded page + reverse proxy of /api, /gateway  │
+│ cmd/sessionary-desktop   the app: lifecycle, window, tray, menus, the services the page    │
+│                          calls (typed, generated into frontend/src/mygo.ts), prefs        │
+│ internal/backend         supervise the server: start, health, restart, give up, stop      │
+│ internal/uiserver        loopback origin: the embedded page + reverse proxy of /api       │
+│ internal/assets          the icons, embedded                                              │
+│ frontend/                the page: Sessionary's web client + the desktop layer, embedded  │
 └───────────────┬───────────────────────────────────────────────┬──────────────────────────┘
                 │ http://127.0.0.1:<ui port>                    │ http://127.0.0.1:<app's own port>
         ┌───────▼────────┐                             ┌────────▼─────────┐
         │ WebKit window  │  /api, SSE, token, gateway  │ Sessionary server│  ../Sessionary, bundled
         │ the page       │ ─────────────────────────▶  │ bundled Node.js  │  as server/cli.mjs
         └────────────────┘                             └──────────────────┘
+```
+
+Repository layout:
+
+```
+cmd/sessionary-desktop/  the application (package main: MyGo binds the services of the main package)
+internal/{backend,uiserver,assets}/
+frontend/                Vite build of ../Sessionary/web/src + src/desktop (layer) + src/overrides + test/
+scripts/build/           build-backend.mjs (the server, one file), fetch-node.mjs (the pinned runtime)
+scripts/dev/             run.sh, drive.py, view.py — scripted development runs and screenshots
+scripts/test/            smoke.sh (Linux, virtual display), smoke-deb.sh (clean Ubuntu), smoke-native.sh (macOS, Windows)
+.github/workflows/       ci.yml
+mygo.json  package.json  go.mod  README.md
 ```
 
 **Backend.** A production build owns its server: the bundled Node.js runs the bundled server on a loopback port of
@@ -40,7 +51,7 @@ model or navigation abstractions is rewritten.
 scheme, so it talks to the server exactly as the web client does: relative `/api/…` URLs, server-sent events,
 terminals, the per-launch token, the Origin/Host guards. The UI server refuses non-loopback Host names (DNS
 rebinding), like the server does. Because that origin changes between launches, `localStorage` is mirrored to
-`prefs.json` in the user data directory (`frontend/src/desktop/runtime.ts`, `prefs.go`).
+`prefs.json` in the user data directory (`frontend/src/desktop/runtime.ts`, `cmd/sessionary-desktop/prefs.go`).
 
 **Frontend.** `frontend/` builds Sessionary's web client **in place** from `../Sessionary/web/src` (never copied), with a
 desktop layer on top:
@@ -73,20 +84,19 @@ bun run typecheck      # go vet (all platforms) + tsc over the desktop layer and
 Scripted runs, for screenshots and checks (development builds only):
 
 ```sh
-scripts/run.sh                       # build, start, wait until the server answers (floats the window on niri)
-scripts/drive.py go '#/models'       # navigate · eval · theme · size · shot · tray · status
-scripts/drive.py tour .shots/x ember # every main surface, one PNG each
+scripts/dev/run.sh                   # build, start, wait until the server answers
+scripts/dev/drive.py go '#/models'       # navigate · eval · theme · size · shot · tray · status
+scripts/dev/drive.py tour .shots/x ember # every main surface, one PNG each
 ```
 
 Environment: `SESSIONARY_DESKTOP_ATTACH=0` always starts an own server · `SESSIONARY_SERVER` a server script ·
-`SESSIONARY_NODE` a Node.js · `SESSIONARY_HOME` Sessionary's data dir (handy for a clean first run) ·
-`SESSIONARY_WINDOW_BUTTONS` the title buttons · `WEBKIT_DISABLE_DMABUF_RENDERER=0|1` overrides the renderer choice.
+`SESSIONARY_NODE` a Node.js · `SESSIONARY_HOME` Sessionary's data dir (handy for a clean first run).
 
 ```sh
 go test ./...                                    # lifecycle (fake servers act out crashes, hangs, …), proxy, layout, dsh
 bun run --cwd frontend test                      # agents' order; overrides in step with the web client
-scripts/smoke.sh build/linux-amd64/sessionary    # the built app, as a first-time user
-scripts/smoke-deb.sh build/linux-amd64/*.deb     # the .deb on a clean Ubuntu in Docker
+scripts/test/smoke.sh build/linux-amd64/sessionary    # the built app, as a first-time user
+scripts/test/smoke-deb.sh build/linux-amd64/*.deb     # the .deb on a clean Ubuntu in Docker
 ```
 
 ## Decisions worth knowing
@@ -99,9 +109,8 @@ scripts/smoke-deb.sh build/linux-amd64/*.deb     # the .deb on a clean Ubuntu in
   places with a real advantage — none yet justified it over the existing web surfaces.
 - **Fonts on Linux.** WebKitGTK takes fontconfig's substitute for unknown families, so `-apple-system` silently became
   Noto Sans CJK. On Linux the stack starts with the bundled Inter, then the CJK face for the UI language.
-- **Blur.** MyGo disables WebKitGTK's DMA-BUF renderer everywhere for safety, which also disables `backdrop-filter`.
-  The app re-enables it unless the only GPU is NVIDIA's own driver, there is no GPU, or it runs in a VM/container; when
-  it is off, the page draws materials opaque instead of see-through (`data-no-blur`).
+- **Blur.** MyGo disables WebKitGTK's DMA-BUF renderer for safety, which also disables `backdrop-filter`. Rather than
+  probe GPUs, drivers and VMs, Linux always draws materials opaque (`data-no-blur`); macOS and Windows blur.
 - **Window controls.** See [Window controls](#window-controls).
 - **Menus.** macOS gets a menu bar; Linux and Windows keep the window's full height and answer the same shortcuts
   in the page (`Ctrl K` search, `Ctrl N` new session, `Ctrl ,` settings, `Ctrl 1–5` sections, `Alt ←/→` history).
@@ -142,32 +151,29 @@ Production builds carry their own Node.js, so nothing needs to be installed on t
 
 | | |
 |---|---|
-| Version | Node.js **24.21.0** (LTS), pinned with each platform's SHA-256 in `scripts/fetch-node.mjs` |
-| Fetched | at **build** time (`node scripts/fetch-node.mjs`, part of `bun run build`), verified, cached in `~/.cache/sessionary-desktop/node`; never at first launch |
+| Version | Node.js **24.21.0** (LTS), pinned with each platform's SHA-256 in `scripts/build/fetch-node.mjs` |
+| Fetched | at **build** time (`node scripts/build/fetch-node.mjs`, part of `bun run build`), verified, cached in `~/.cache/sessionary-desktop/node`; never at first launch |
 | Staged | `.stage/runtime/{bin/node,LICENSE}` (stripped on Linux: 108 MB), `.stage/server/cli.mjs` (the server, one self-contained file) |
 | Installed | next to the executable: `/opt/sessionary/{sessionary,runtime/bin/node,server/cli.mjs}` from the `.deb` (with `/usr/bin/sessionary-desktop`), the same three in the tarball |
-| Found | `runtimeCandidates()` / `serverScripts()` in `supervise.go`: `SESSIONARY_NODE` / `SESSIONARY_SERVER`, then the resources dir, then the executable's dir (symlinks resolved) |
+| Found | `runtimeCandidates()` / `serverScripts()` in `cmd/sessionary-desktop/supervise.go`: `SESSIONARY_NODE` / `SESSIONARY_SERVER`, then the resources dir, then the executable's dir (symlinks resolved) |
 | Development | the same `.stage/` once built; failing that, a dev build may use any Node.js ≥ 22.13 it finds (PATH, nvm, volta, fnm, mise, asdf). A production build never uses a system Node.js (`SESSIONARY_SYSTEM_NODE=1` to allow it) |
 
 Package sizes (linux/amd64): `.deb` 46 MB, tarball 46 MB (the runtime is 108 MB of the 121 MB installed).
 
 ## Window controls
 
+One strategy per OS, chosen by `GOOS` and nothing else — no code looks at X11 versus Wayland, the compositor or the
+desktop environment (the approach of [Magpie](https://github.com/yetone/magpie), which keeps one GTK mechanism and
+one CI matrix instead of a table of desktops):
+
 | Platform | Title bar | Buttons |
 |---|---|---|
 | macOS | hidden, inset | the system's traffic lights over the sidebar |
 | Windows | hidden | Windows 11's caption buttons (with snap layouts), drawn by the system |
-| Linux | frameless (MyGo announces client-side decorations, so no compositor adds a title bar) | drawn by the page, each calling the window's own method; maximize/restore and full screen follow the window's real state |
+| Linux | frameless (MyGo announces client-side decorations, so no compositor adds a title bar) | drawn by the page — minimize, maximize, close, always the same, on the right — each calling the window's own method |
 
-Linux buttons follow the desktop's layout (`gtk-decoration-layout`: which buttons, which side). Where no desktop owns
-that setting (a bare compositor), all three are shown. A button the window manager cannot honour is left out: on
-X11, what `_NET_WM_ALLOWED_ACTIONS` says for the window (none set: close only); on Wayland, GTK 3 drops the
-compositor's capabilities, so niri, Sway and Hyprland (no minimize) are listed. `SESSIONARY_WINDOW_BUTTONS`
-(`":minimize,maximize,close"`) overrides. The title bar's empty space moves the window, double-click maximizes, the
-outer 5 px resize, F11 toggles full screen.
-
-Why: MyGo's hidden title bar shows GTK's buttons only when the compositor does not prefer server-side decorations;
-niri prefers them but draws no title bar (no buttons at all), KWin draws one (a title bar on top of the page's).
+The title bar's empty space moves the window, double-click maximizes, F11 toggles full screen. A compositor with no
+minimized state simply ignores Minimize; that is accepted rather than special-cased.
 
 ## Window, tray and quitting
 
@@ -193,24 +199,8 @@ NSStatusItem, not an element drawn in the page. Platform notes:
   accessory (no `SetActivationPolicy`).
 - **Windows** uses the notification area (left- and right-clicks both open the menu).
 
-`scripts/drive.py tray` reports whether the tray is installed, `window hide|show|quit` exercises the lifecycle, and
-`go test ./...` covers the icon, the menu and the close-versus-quit rule (`tray_test.go`).
-
-## Linux compatibility
-
-Pragmatic: what CI and the developer machine run is tested; the rest is expected to work and fixed when it blocks.
-
-| Environment | Status | How |
-|---|---|---|
-| niri 26.04 / Wayland (fractional 1.1 + 1.13 text scaling) | tested | daily use; maximize, restore, full screen, close, page-drawn buttons, blur |
-| GNOME 50 / Wayland | tested | headless GNOME Shell: real pointer and keyboard input — drag, double-click maximize, edge resize, buttons, minimize, F11, focus, notifications |
-| X11 (i3 in Xephyr) | tested | real XTest input: drag, F11, close; i3 honours no maximize/resize, so only close is shown |
-| X11 at `GDK_SCALE=2` | tested | renders at 2× |
-| Clean Ubuntu 26.04 (Xvfb, no WM, no Node.js) | tested in CI | `.deb` installed by apt, full smoke test |
-| KDE Plasma / KWin (Wayland, X11) | expected | frameless + `announce_csd` means no KWin title bar; X11 buttons follow KWin's allowed actions; not run here |
-| GNOME / X11 | n/a | GNOME 50 has no X11 session |
-| Multiple monitors, HiDPI > 2× | expected | untested beyond the above; Wayland restores window size, not position (compositors place windows) |
-| NVIDIA-only, VMs, containers | expected | DMA-BUF renderer off → no blur; materials drawn opaque |
+`scripts/dev/drive.py tray` reports whether the tray is installed, `window hide|show|quit` exercises the lifecycle, and
+`go test ./...` covers the icon, the menu and the close-versus-quit rule (`cmd/sessionary-desktop/tray_test.go`).
 
 ## Continuous integration
 
@@ -218,8 +208,9 @@ Pragmatic: what CI and the developer machine run is tested; the rest is expected
 - **go** (Linux, macOS, Windows): gofmt, vet for all three platforms, tests (the lifecycle suite drives real process
   groups on Unix), race detector on Linux;
 - **package** (linux/amd64, linux/arm64, darwin/arm64, windows/amd64): checks out Sessionary beside the app
-  (`SESSIONARY_TOKEN` secret if private; `sessionary_ref` input), type-checks the frontend, `go tool mygo build`;
-  on Linux, `scripts/smoke.sh` runs the binary under Xvfb and `scripts/smoke-deb.sh` installs the `.deb` on a clean
+  (`SESSIONARY_TOKEN` secret if private; `sessionary_ref` input), generates the bindings, type-checks the frontend, runs its tests, `go tool mygo build`;
+  on macOS and Windows, `scripts/test/smoke-native.sh` runs the packaged executable once;
+  on Linux, `scripts/test/smoke.sh` runs the binary under Xvfb and `scripts/test/smoke-deb.sh` installs the `.deb` on a clean
   Ubuntu without Node.js and runs the same smoke test. Packages and smoke reports are uploaded.
 
 The smoke test (`SESSIONARY_DESKTOP_SMOKE=report.json`, any build) checks: the bundled server answers, the page
@@ -258,6 +249,6 @@ else one. The order lives in `overrides/MachinePage.tsx`, the web client's file 
 
 ## Not yet done
 
-- KDE Plasma run, macOS and Windows smoke runs (CI builds them; only Linux is smoke-tested).
+- macOS and Windows smoke runs are wired in CI (`scripts/test/smoke-native.sh`, best effort) but have not run yet; only Linux's is proven.
 - Windows: agents started by the server are not stopped with it (no job object yet).
 - macOS: vibrancy sidebar, signing and notarization. A preferences window, auto-update, a tray badge for running agents.
