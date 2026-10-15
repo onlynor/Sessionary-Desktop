@@ -2,13 +2,13 @@
 // which the app runs with Node.js and ships among its resources.
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(here, '../..')
 const sessionary = path.resolve(process.env.SESSIONARY_DIR ?? path.join(root, '../Sessionary'))
 const require = createRequire(path.join(sessionary, 'package.json'))
-const { build } = await import(require.resolve('tsup'))
+const { build } = await import(pathToFileURL(require.resolve('tsup')).href) // a file:// URL: Windows paths are not importable
 
 await build({
   entry: [path.join(sessionary, 'src/cli.ts')],
