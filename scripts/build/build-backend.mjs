@@ -11,7 +11,8 @@ const require = createRequire(path.join(sessionary, 'package.json'))
 const { build } = await import(pathToFileURL(require.resolve('tsup')).href) // a file:// URL: Windows paths are not importable
 
 await build({
-  entry: [path.join(sessionary, 'src/cli.ts')],
+  // tsup takes entries as globs: a Windows path's backslashes would be escapes, so it is given with forward slashes
+  entry: [path.join(sessionary, 'src/cli.ts').split(path.sep).join('/')],
   format: ['esm'],
   target: 'node22',
   platform: 'node',
