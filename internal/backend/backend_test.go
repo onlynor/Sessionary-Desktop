@@ -80,7 +80,7 @@ func fakeServer() {
 		fmt.Println("Error: listen EADDRINUSE: address already in use 127.0.0.1:" + port)
 		os.Exit(1)
 	case "never":
-		select {}
+		sleepForever()
 	case "stubborn":
 		signalIgnore()
 	case "child":
@@ -112,9 +112,18 @@ func fakeServer() {
 		time.Sleep(d)
 		l.Close()
 		srv.Close()
-		select {}
+		sleepForever()
 	}
-	select {}
+	sleepForever()
+}
+
+// sleepForever blocks without relying on `select {}`: with no other goroutine running, the Go runtime may report a
+// deadlock and exit (the likely cause of two macOS CI failures), which turns "a server that never answers" into "a
+// server that exits".
+func sleepForever() {
+	for {
+		time.Sleep(time.Hour)
+	}
 }
 
 func signalIgnore() { signalNotifyIgnore(syscall.SIGTERM) }

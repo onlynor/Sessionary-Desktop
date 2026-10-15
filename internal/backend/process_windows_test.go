@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -79,6 +80,10 @@ type pids struct{ Agent, Launched int }
 func startFakeServer(t *testing.T) (*process, pids) {
 	t.Helper()
 	node := needNode(t)
+	script := filepath.Join(t.TempDir(), "server.js")
+	if err := os.WriteFile(script, []byte(fakeServer), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	logs := newLogBook(100, "", nil)
 	got := make(chan pids, 1)
 	var once sync.Once
@@ -90,7 +95,7 @@ func startFakeServer(t *testing.T) (*process, pids) {
 			}
 		}
 	})
-	p, err := startProcess(node, "", []string{"-e", fakeServer}, t.TempDir(), nil, logs, false)
+	p, err := startProcess(node, "", []string{script}, t.TempDir(), nil, logs, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,8 +104,14 @@ func startFakeServer(t *testing.T) (*process, pids) {
 		t.Cleanup(func() { killPid(ids.Launched) }) // the launch is meant to survive: the test ends it
 		return p, ids
 	case <-time.After(15 * time.Second):
+		exited := false
+		select {
+		case <-p.exited:
+			exited = true
+		default:
+		}
 		p.terminate(time.Second)
-		t.Fatal("the server never reported its children")
+		t.Fatalf("the server never reported its children (exited=%v, %v); its output:\n%s", exited, p.err, strings.Join(logs.lines(), "\n"))
 		return nil, pids{}
 	}
 }
