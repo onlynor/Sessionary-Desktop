@@ -6,8 +6,10 @@ import { describe, expect, test } from 'bun:test'
 // compare the rest with the web client's file, so that a change upstream is carried into the desktop's copy
 // rather than silently drifting from it.
 const SESSIONARY = path.resolve(process.env.SESSIONARY_DIR ?? path.join(import.meta.dir, '../../../Sessionary'))
-const web = (f: string) => readFileSync(path.join(SESSIONARY, 'web/src', f), 'utf8')
-const own = (f: string) => readFileSync(path.join(import.meta.dir, '../src/overrides', f), 'utf8')
+// a Windows checkout has CRLF line endings; the comparison is of the text, not of the platform's newlines
+const read = (file: string) => readFileSync(file, 'utf8').replace(/\r\n/g, '\n')
+const web = (f: string) => read(path.join(SESSIONARY, 'web/src', f))
+const own = (f: string) => read(path.join(import.meta.dir, '../src/overrides', f))
 // an override imports the client's modules by alias instead of relatively
 const aliased = (src: string) => src.replace(/from '\.\/([A-Za-z0-9]+)'/g, "from '@web/$1'")
 const header = /^\/\*\*[\s\S]*?\*\/\n/

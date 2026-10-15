@@ -5,8 +5,8 @@ import { recentIds, TRAY_LABELS } from '../src/desktop/trayLabels'
 
 const SESSIONARY = path.resolve(process.env.SESSIONARY_DIR ?? path.join(import.meta.dir, '../../../Sessionary'))
 const root = path.join(import.meta.dir, '../..')
-const catalog = readFileSync(path.join(SESSIONARY, 'web/src/locales.ts'), 'utf8') + readFileSync(path.join(root, 'frontend/src/desktop/i18n.ts'), 'utf8')
-const goDefaults = readFileSync(path.join(root, 'cmd/sessionary-desktop/traymenu.go'), 'utf8')
+const catalog = (readFileSync(path.join(SESSIONARY, 'web/src/locales.ts'), 'utf8') + readFileSync(path.join(root, 'frontend/src/desktop/i18n.ts'), 'utf8')).replace(/\r\n/g, '\n')
+const goDefaults = readFileSync(path.join(root, 'cmd/sessionary-desktop/traymenu.go'), 'utf8').replace(/\r\n/g, '\n')
 
 // a catalog row is ['English', '简体', '繁體', '日本語'] — all four languages, or the row does not translate
 const row = (en: string) => {
