@@ -48,7 +48,8 @@ func (h *harness) waitAgent() {
 	h.b.Start()
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
-		if d, _ := h.agentState(); d != "" {
+		// detection is written first, then the agent runs and its output is written: wait for both
+		if d, o := h.agentState(); d == "none" || (d != "" && o != "") {
 			return
 		}
 		time.Sleep(30 * time.Millisecond)
