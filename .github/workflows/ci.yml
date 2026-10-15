@@ -157,11 +157,14 @@ jobs:
         id: smoke_native_win
         if: runner.os == 'Windows'
         continue-on-error: true
-        run: scripts/test/smoke-native.sh "$(find build -name 'sessionary*.exe' ! -iname '*setup*' | head -1)" "$RUNNER_TEMP/smoke"
+        run: |
+          find build -type f | head -30
+          scripts/test/smoke-native.sh "$(find build -name 'sessionary*.exe' ! -iname '*setup*' | head -1)" "$RUNNER_TEMP/smoke"
       - name: Report the native smoke outcome
         if: always() && runner.os != 'Linux'
         env:
-          OUTCOME: ${{ steps.smoke_native.outcome || steps.smoke_native_win.outcome || 'skipped' }}
+          # each step's outcome is 'skipped' on the other OS, which is truthy: pick by OS
+          OUTCOME: ${{ runner.os == 'macOS' && steps.smoke_native.outcome || steps.smoke_native_win.outcome }}
         run: |
           case "$OUTCOME" in
             success) msg="native smoke on ${{ runner.os }}: passed" ;;

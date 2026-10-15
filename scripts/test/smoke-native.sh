@@ -12,6 +12,8 @@ export SESSIONARY_DESKTOP_SMOKE="$out/report.json" SESSIONARY_DESKTOP_ATTACH=0
 unset SESSIONARY_NODE SESSIONARY_SERVER SESSIONARY_RESOURCES SESSIONARY_DESKTOP_DRIVE
 status=0
 perl -e 'alarm 300; exec @ARGV' -- "$app" >"$out/app.log" 2>&1 || status=$?
-cat "$out/report.json" 2>/dev/null || echo "smoke: no report"
+echo "app: $app ($(wc -c < "$app" 2>/dev/null) bytes)"
 echo "app exit status: $status"
-[ "$status" -eq 0 ] || { tail -40 "$out/app.log"; exit 1; }
+if [ -f "$out/report.json" ]; then cat "$out/report.json"; else echo "smoke: no report"; status=1; fi
+# a run that left no report did not test anything: it fails, with what the app said
+[ "$status" -eq 0 ] || { echo "--- app output"; tail -60 "$out/app.log"; exit 1; }
