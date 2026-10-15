@@ -159,7 +159,7 @@ jobs:
         continue-on-error: true
         run: |
           find build -type f | head -30
-          scripts/test/smoke-native.sh "$(find build -name 'sessionary*.exe' ! -iname '*setup*' | head -1)" "$RUNNER_TEMP/smoke"
+          scripts/test/smoke-native.sh "$(find build -iname 'sessionary.exe' | head -1)" "$RUNNER_TEMP/smoke"
       - name: Report the native smoke outcome
         if: always() && runner.os != 'Linux'
         env:
