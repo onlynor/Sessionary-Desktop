@@ -25,6 +25,7 @@ if (!existsSync(WEB_SRC)) throw new Error(`Sessionary's web client was not found
 if (!existsSync(MODULES)) throw new Error(`Sessionary's packages are not installed: run \`pnpm install\` in ${SESSIONARY}`)
 
 const EXTS = ['', '.tsx', '.ts', '.css']
+const isOwn = (file: string) => path.normalize(file).startsWith(path.normalize(OWN_SRC + path.sep))
 const findOverride = (file: string) => {
   const rel = path.relative(WEB_SRC, file).replace(/\.(tsx|ts)$/, '')
   if (rel.startsWith('..')) return null
@@ -54,7 +55,8 @@ function desktopLayer(): Plugin {
         return r
       }
       // a package imported by the desktop's own code: from Sessionary's install
-      if (!r && importer.startsWith(OWN_SRC) && !source.startsWith('.') && !source.startsWith('/')) {
+      // (Vite hands importers over with forward slashes, even on Windows, where OWN_SRC has backslashes)
+      if (!r && isOwn(importer) && !source.startsWith('.') && !source.startsWith('/')) {
         return this.resolve(source, path.join(WEB_SRC, 'main.tsx'), { ...options, skipSelf: true })
       }
       return r
