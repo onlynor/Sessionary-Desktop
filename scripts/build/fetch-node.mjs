@@ -67,7 +67,9 @@ const dir = name.replace(/\.(tar\.xz|tar\.gz|zip)$/, '')
 const windows = target.startsWith('windows/')
 const binary = windows ? `${dir}/node.exe` : `${dir}/bin/node`
 // tar reads all three: GNU tar the .tar.xz of Linux, bsdtar (macOS, Windows) the .tar.gz and .zip
-execFileSync('tar', ['-xf', archive, '-C', work, binary, `${dir}/LICENSE`])
+// on a Windows machine, the system's bsdtar: the GNU tar that Git's shell puts first reads "C:\..." as host:file
+const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar'
+execFileSync(tar, ['-xf', archive, '-C', work, binary, `${dir}/LICENSE`])
 mkdirSync(path.join(out, 'bin'), { recursive: true })
 const dest = path.join(out, 'bin', windows ? 'node.exe' : 'node')
 copyFileSync(path.join(work, binary), dest)
