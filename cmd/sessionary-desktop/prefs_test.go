@@ -50,3 +50,10 @@ func TestPrefsRoundTrip(t *testing.T) {
 		t.Fatalf("an empty write reads empty, got %v", got)
 	}
 }
+
+// a build that was not packaged by mygo has no version in it: it says so, rather than an empty one
+func TestAppVersionHasAFallback(t *testing.T) {
+	if appVersion() == "" {
+		t.Error("appVersion is empty")
+	}
+}

@@ -377,8 +377,12 @@ func TestStopEndsTheGroup(t *testing.T) {
 	server := pids(filepath.Join(h.dir, "pids"))[0]
 	child := pids(filepath.Join(h.dir, "children"))[0]
 	h.b.Stop()
-	if alive(server) || alive(child) {
-		t.Fatalf("left running after Stop: server %v, child %v", alive(server), alive(child))
+	// without /proc (macOS) a killed process answers kill(0) until init has reaped it: give that a moment
+	for i := 0; i < 100 && (alive(server) || alive(child)); i++ {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if sa, ca := alive(server), alive(child); sa || ca {
+		t.Fatalf("left running after Stop: server %v, child %v", sa, ca)
 	}
 	if h.b.Status().Phase != PhaseStopped {
 		t.Fatalf("phase = %s, want stopped", h.b.Status().Phase)

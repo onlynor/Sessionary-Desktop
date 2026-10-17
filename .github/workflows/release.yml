@@ -1,0 +1,136 @@
+name: Release
+
+# Pushing a tag vX.Y.Z publishes that version as a DRAFT GitHub release: the same build, test and smoke jobs as CI run
+# on the tagged commit (ci.yml), every platform's packages are collected with SHA-256 sums, and nothing becomes public
+# until the draft is published by hand. The version is mygo.json's "version"; the tag must say the same.
+#
+#   1. a pull request "release: vX.Y.Z" sets "version" in mygo.json; merge it
+#   2. git tag vX.Y.Z <that commit on main> && git push origin vX.Y.Z
+#   3. read the draft (Releases page): the smoke summaries, the notes, the files; publish it
+#
+# A tag with a suffix (v0.2.0-rc.1) becomes a pre-release.
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  # a rehearsal: the same jobs and the notes, printed, on any branch; nothing is published
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: tag matches mygo.json
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: v
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' mygo.json | head -1)
+          echo "tag=$tag mygo.json=$version"
+          if [ "$GITHUB_REF_TYPE" != tag ]; then echo "rehearsal on $tag: nothing is checked against a tag and nothing is published"; echo "version=$version" >> "$GITHUB_OUTPUT"; exit 0; fi
+          [ "$tag" = "v$version" ] || { echo "::error::the tag $tag is not v$version (mygo.json): fix one of them"; exit 1; }
+          # a release is cut from main: a tag on a side branch would publish unreviewed code
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$tag is not on main"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  ci:
+    name: ci
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+    with:
+      sessionary_ref: ${{ vars.SESSIONARY_RELEASE_REF || 'main' }}
+      expect_version: ${{ needs.verify.outputs.version }}
+
+  publish:
+    name: draft release
+    needs: [verify, ci]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 20
+    steps:
+      # the history, for the notes: what changed since the previous tag
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: sessionary-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: smoke-*
+          path: smoke
+      - name: Collect the files
+        run: |
+          cd dist
+          # GitHub turns spaces in asset names into dots: say what we mean
+          for f in *\ *; do [ -e "$f" ] && mv "$f" "${f// /-}"; done
+          mv sessionary-commit.txt "$GITHUB_WORKSPACE/sessionary-commit.txt"
+          sha256sum * | tee SHA256SUMS
+          ls -l
+      - name: Write the notes
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # what changed since the previous version tag, from the Conventional Commit subjects (no merge commits)
+          prev=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -vx "$TAG" | head -1 || true)
+          {
+            if [ -z "$prev" ]; then
+              echo "First release."
+            else
+              range="$prev..$GITHUB_SHA"
+              for group in "feat:Features" "fix:Fixes" "perf:Performance" "build|ci|test|docs|refactor|chore:Other changes"; do
+                types="${group%%:*}"; title="${group#*:}"
+                lines=$(git log "$range" --no-merges --pretty='%s' | grep -E "^($types)(\(.+\))?!?: " | sed -E 's/^[a-z]+(\(.+\))?!?: /- /' || true)
+                [ -n "$lines" ] && { echo "### $title"; echo; echo "$lines"; echo; }
+              done
+              echo "Full list: https://github.com/$GITHUB_REPOSITORY/compare/$prev...$TAG"
+            fi
+          } > changes.md
+          cat changes.md
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          sessionary=$(cat sessionary-commit.txt)
+          pre=""; case "$VERSION" in *-*) pre="--prerelease" ;; esac
+          {
+            cat changes.md
+            echo
+            cat <<NOTES
+          ### Install
+
+          - **Linux:** \`sudo apt install ./sessionary_${VERSION}_amd64.deb\` (or \`_arm64\`), or unpack the tarball and run \`install.sh\`
+          - **macOS (Apple silicon):** open the \`.dmg\`, drag Sessionary to Applications
+          - **Windows:** run \`Sessionary-Setup-${VERSION}-amd64.exe\`
+
+          Not signed yet: macOS Gatekeeper (right-click → Open) and Windows SmartScreen (More info → Run anyway) will warn.
+          Verify a download with \`sha256sum -c SHA256SUMS\`.
+
+          | | |
+          |---|---|
+          | Built from | \`${GITHUB_SHA::7}\` of this repository |
+          | Bundled Sessionary | [\`${sessionary::7}\`](https://github.com/onlynor/Sessionary/commit/${sessionary}) |
+          | Bundled Node.js | 24.21.0 |
+
+          Every platform's package was started once by CI on the tagged commit and had to report version ${VERSION}.
+          NOTES
+          } | sed 's/^          //' > notes.md
+          cat notes.md
+          [ "$GITHUB_REF_TYPE" = tag ] || { echo "rehearsal: no release created"; exit 0; }
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --draft $pre --title "Sessionary Desktop ${VERSION}" --notes-file notes.md --verify-tag
+          echo "### Draft release created: ${TAG}" >> "$GITHUB_STEP_SUMMARY"

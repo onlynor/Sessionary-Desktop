@@ -14,6 +14,6 @@ USER tester
 DOCKER
 sed -i "s/\${UBUNTU:-26.04}/${UBUNTU:-26.04}/" "$ctx/Dockerfile"
 docker build --network host -q -t sessionary-smoke "$ctx" >/dev/null
-docker run --rm sessionary-smoke bash -c '
+docker run --rm -e SESSIONARY_EXPECT_VERSION sessionary-smoke bash -c '
   if command -v node >/dev/null; then echo "smoke: Node.js is on PATH in the clean image" >&2; exit 1; fi
   /tmp/smoke.sh /usr/bin/sessionary-desktop /tmp/out'
