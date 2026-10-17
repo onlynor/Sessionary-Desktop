@@ -74,11 +74,19 @@ jobs:
       - name: Collect the files
         run: |
           cd dist
+          # each artifact keeps its build/<os>-<arch>/ folder: one flat directory (install.sh is the same file on both
+          # Linux arches, it picks its own with uname)
+          find . -mindepth 2 -name install.sh | sort | tail -n +2 | xargs -r rm
+          find . -mindepth 2 -type f -exec mv -t . {} +
+          find . -mindepth 1 -type d -empty -delete
           # GitHub turns spaces in asset names into dots: say what we mean
           for f in *\ *; do [ -e "$f" ] && mv "$f" "${f// /-}"; done
           mv sessionary-commit.txt "$GITHUB_WORKSPACE/sessionary-commit.txt"
           sha256sum * | tee SHA256SUMS
           ls -l
+          # a release without all four platforms' packages is not one
+          for want in '*.deb' '*.tar.gz' '*.dmg' '*Setup*.exe'; do ls $want >/dev/null 2>&1 || { echo "::error::no $want among the artifacts"; exit 1; }; done
+          [ "$(ls *.deb | wc -l)" = 2 ] && [ "$(ls *.tar.gz | wc -l)" = 2 ] || { echo '::error::expected a .deb and a .tar.gz for amd64 and arm64'; exit 1; }
       - name: Write the notes
         env:
           VERSION: ${{ needs.verify.outputs.version }}
