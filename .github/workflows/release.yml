@@ -55,7 +55,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    timeout-minutes: 20
     steps:
+      # the history, for the notes: what changed since the previous tag
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/download-artifact@v8
         with:
           pattern: sessionary-*
@@ -70,9 +76,30 @@ jobs:
           cd dist
           # GitHub turns spaces in asset names into dots: say what we mean
           for f in *\ *; do [ -e "$f" ] && mv "$f" "${f// /-}"; done
-          mv sessionary-commit.txt ../sessionary-commit.txt
+          mv sessionary-commit.txt "$GITHUB_WORKSPACE/sessionary-commit.txt"
           sha256sum * | tee SHA256SUMS
           ls -l
+      - name: Write the notes
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # what changed since the previous version tag, from the Conventional Commit subjects (no merge commits)
+          prev=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -vx "$TAG" | head -1 || true)
+          {
+            if [ -z "$prev" ]; then
+              echo "First release."
+            else
+              range="$prev..$GITHUB_SHA"
+              for group in "feat:Features" "fix:Fixes" "perf:Performance" "build|ci|test|docs|refactor|chore:Other changes"; do
+                types="${group%%:*}"; title="${group#*:}"
+                lines=$(git log "$range" --no-merges --pretty='%s' | grep -E "^($types)(\(.+\))?!?: " | sed -E 's/^[a-z]+(\(.+\))?!?: /- /' || true)
+                [ -n "$lines" ] && { echo "### $title"; echo; echo "$lines"; echo; }
+              done
+              echo "Full list: https://github.com/$GITHUB_REPOSITORY/compare/$prev...$TAG"
+            fi
+          } > changes.md
+          cat changes.md
       - name: Draft the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -81,8 +108,18 @@ jobs:
         run: |
           sessionary=$(cat sessionary-commit.txt)
           pre=""; case "$VERSION" in *-*) pre="--prerelease" ;; esac
-          cat > notes.md <<NOTES
-          Sessionary Desktop ${VERSION}
+          {
+            cat changes.md
+            echo
+            cat <<NOTES
+          ### Install
+
+          - **Linux:** \`sudo apt install ./sessionary_${VERSION}_amd64.deb\` (or \`_arm64\`), or unpack the tarball and run \`install.sh\`
+          - **macOS (Apple silicon):** open the \`.dmg\`, drag Sessionary to Applications
+          - **Windows:** run \`Sessionary-Setup-${VERSION}-amd64.exe\`
+
+          Not signed yet: macOS Gatekeeper (right-click → Open) and Windows SmartScreen (More info → Run anyway) will warn.
+          Verify a download with \`sha256sum -c SHA256SUMS\`.
 
           | | |
           |---|---|
@@ -90,17 +127,9 @@ jobs:
           | Bundled Sessionary | [\`${sessionary::7}\`](https://github.com/onlynor/Sessionary/commit/${sessionary}) |
           | Bundled Node.js | 24.21.0 |
 
-          **Install**
-          - Linux: \`sudo apt install ./sessionary_${VERSION}_amd64.deb\` (or \`_arm64\`), or unpack the tarball and run \`install.sh\`
-          - macOS (Apple silicon): open the \`.dmg\`, drag Sessionary to Applications
-          - Windows: run \`Sessionary-Setup-${VERSION}-amd64.exe\`
-
-          **Not signed yet.** macOS Gatekeeper (right-click → Open) and Windows SmartScreen (More info → Run anyway) will warn.
-          Verify a download with \`sha256sum -c SHA256SUMS\`.
-
-          Tested by CI on the tagged commit: Linux (amd64, arm64) packages run under a virtual display, the \`.deb\` on a clean
-          Ubuntu without Node.js; macOS and Windows packages ran once, with the result in the workflow's summary.
+          Every platform's package was started once by CI on the tagged commit and had to report version ${VERSION}.
           NOTES
+          } | sed 's/^          //' > notes.md
           cat notes.md
           [ "$GITHUB_REF_TYPE" = tag ] || { echo "rehearsal: no release created"; exit 0; }
           gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --draft $pre --title "Sessionary Desktop ${VERSION}" --notes-file notes.md --verify-tag

@@ -54,6 +54,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -107,6 +108,7 @@ jobs:
             platform: windows/amd64
             artifact: windows-amd64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
@@ -166,19 +168,20 @@ jobs:
       - name: Smoke-test the .deb on a clean Ubuntu
         if: runner.os == 'Linux'
         run: scripts/test/smoke-deb.sh build/linux-*/sessionary_*.deb
-      # macOS and Windows runners have a desktop session, so the packaged app is run once there. This has never
-      # executed: it may not pass. It must not block the build, but its outcome is never implicit — the step after
+      # macOS and Windows runners have a desktop session, so the packaged app is run once there. In CI it does not
+      # block the build (a runner's desktop can misbehave), but a release (expect_version set) cannot go out with it
+      # failing, as Magpie's release launches every platform's app before it publishes. Its outcome is never implicit — the step after
       # it states passed / FAILED / not run in the job summary and as an annotation. Compiling and packaging for
       # these platforms is checked above; native runtime behaviour is claimed only when this says "passed".
       - name: Smoke-test the app (macOS)
         id: smoke_native
         if: runner.os == 'macOS'
-        continue-on-error: true
+        continue-on-error: ${{ inputs.expect_version == '' }}
         run: scripts/test/smoke-native.sh "$(find build -path '*.app/Contents/MacOS/*' -type f | head -1)" "$RUNNER_TEMP/smoke"
       - name: Smoke-test the app (Windows)
         id: smoke_native_win
         if: runner.os == 'Windows'
-        continue-on-error: true
+        continue-on-error: ${{ inputs.expect_version == '' }}
         run: |
           find build -type f | head -30
           scripts/test/smoke-native.sh "$(find build -iname 'sessionary.exe' | head -1)" "$RUNNER_TEMP/smoke"
