@@ -32,7 +32,7 @@ type Info struct {
 
 // Info returns facts about the app.
 func (Desktop) Info() Info {
-	return Info{Platform: runtime.GOOS, Version: version, Dev: mygo.IsDev(), Blur: blur(), Tray: trayUsable()}
+	return Info{Platform: runtime.GOOS, Version: appVersion(), Dev: mygo.IsDev(), Blur: blur(), Tray: trayUsable()}
 }
 
 // Backend returns the Sessionary server's status.

@@ -19,8 +19,13 @@ import (
 	"github.com/onlynor/sessionary-desktop/internal/uiserver"
 )
 
-// version is set by `mygo build` from mygo.config.ts; "dev" otherwise.
-var version = "dev"
+// appVersion is the version in mygo.json, which `mygo build` links into the app; "dev" for a development build.
+func appVersion() string {
+	if v := mygo.App.Version(); v != "" {
+		return v
+	}
+	return "dev"
+}
 
 var (
 	server *backend.Backend

@@ -23,6 +23,7 @@ import (
 
 type smokeReport struct {
 	OK       bool              `json:"ok"`
+	Version  string            `json:"version"`
 	Error    string            `json:"error,omitempty"`
 	Steps    []string          `json:"steps"`
 	Backend  backend.Status    `json:"backend"`
@@ -39,7 +40,7 @@ func startSmoke() {
 		return
 	}
 	go func() {
-		r := smokeReport{Timings: map[string]string{}}
+		r := smokeReport{Timings: map[string]string{}, Version: appVersion()}
 		start := time.Now()
 		err := runSmoke(&r, start)
 		r.OK = err == nil
@@ -56,6 +57,10 @@ func startSmoke() {
 }
 
 func runSmoke(r *smokeReport, start time.Time) error {
+	// a release build says which version it must be (the tag): a package built from the wrong tree fails here
+	if want := os.Getenv("SESSIONARY_EXPECT_VERSION"); want != "" && want != appVersion() {
+		return fmt.Errorf("the app says it is version %q, the release is %q", appVersion(), want)
+	}
 	step := func(s string) {
 		r.Steps = append(r.Steps, s)
 		r.Timings[s] = time.Since(start).Round(time.Millisecond).String()

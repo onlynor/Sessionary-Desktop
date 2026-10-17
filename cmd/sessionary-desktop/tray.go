@@ -111,7 +111,7 @@ func refreshTray() {
 func showAbout() {
 	go func() {
 		m := currentTrayModel(true)
-		_, _ = mygo.Dialog.Message(mygo.MessageOptions{Title: m.label("about"), Message: "Sessionary " + version})
+		_, _ = mygo.Dialog.Message(mygo.MessageOptions{Title: m.label("about"), Message: "Sessionary " + appVersion()})
 	}()
 }
 
