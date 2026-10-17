@@ -76,7 +76,8 @@ jobs:
           cd dist
           # each artifact keeps its build/<os>-<arch>/ folder: one flat directory (install.sh is the same file on both
           # Linux arches, it picks its own with uname)
-          find . -mindepth 2 -type f -exec mv -f -t . {} +
+          find . -mindepth 2 -name install.sh | sort | tail -n +2 | xargs -r rm
+          find . -mindepth 2 -type f -exec mv -t . {} +
           find . -mindepth 1 -type d -empty -delete
           # GitHub turns spaces in asset names into dots: say what we mean
           for f in *\ *; do [ -e "$f" ] && mv "$f" "${f// /-}"; done
