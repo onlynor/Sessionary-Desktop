@@ -12,7 +12,9 @@
   "out": "build",
   "resources": [
     ".stage/runtime",
-    ".stage/server"
+    ".stage/server",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "linux": {
     "comment": "The control center for your AI coding agents",

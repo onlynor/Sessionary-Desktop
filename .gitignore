@@ -10,5 +10,5 @@ node_modules/
 /.run/
 /.shots/
 
-# local design notes
-/docs/
+# local design notes (not published docs: docs/*.md referenced from the README stay tracked)
+/docs/design-review.md
