@@ -28,9 +28,9 @@ func appVersion() string {
 }
 
 var (
-	server *backend.Backend
-	ui     *uiserver.Server
-	main_  *mygo.Window
+	server   *backend.Backend
+	uiServer *uiserver.Server
+	main_    *mygo.Window
 )
 
 func main() {
@@ -44,7 +44,7 @@ func main() {
 	mygo.Bind(&Desktop{})
 	mygo.App.WhenReady(func() {
 		var err error
-		ui, err = uiserver.Start(uiserver.Options{
+		uiServer, err = uiserver.Start(uiserver.Options{
 			Backend: server.URL,
 			Files:   frontend.Files(),
 			DevURL:  devURL(),
@@ -54,8 +54,8 @@ func main() {
 		}
 		server.Start()
 		installTray() // before the page asks whether there is one (Info.Tray)
-		openMain()
 		installMenu()
+		ensureMain() // the native startup window until the backend answers, then the real one
 		startDrive()
 		startSmoke()
 	})
@@ -65,7 +65,10 @@ func main() {
 		}
 	})
 	mygo.App.OnWindowAllClosed(func() {
-		if runtime.GOOS != "darwin" {
+		// the native startup window closing as openMain's real one opens (launch.go), and the idle teardown
+		// closing a hidden one for its memory (memory.go), both pass through here with no window open for a
+		// moment or for good; neither is a close that should quit while the tray is a way back
+		if runtime.GOOS != "darwin" && !shouldHideOnClose() {
 			mygo.App.Quit()
 		}
 	})
@@ -81,8 +84,8 @@ func main() {
 			trayStop()
 		}
 		server.Stop()
-		if ui != nil {
-			ui.Close()
+		if uiServer != nil {
+			uiServer.Close()
 		}
 	})
 	if err := mygo.App.Run(); err != nil {
@@ -94,7 +97,7 @@ func main() {
 }
 
 func openMain() {
-	main_ = mygo.NewWindow(windowOptions(ui.URL + "/"))
+	main_ = mygo.NewWindow(windowOptions(uiServer.URL + "/"))
 	win := main_
 	win.SetIcon(assets.Icon) // the taskbar's icon for a build run without its desktop entry (Linux, Windows)
 	win.OnReadyToShow(win.Show)
@@ -109,7 +112,7 @@ func openMain() {
 			return
 		}
 		origin := u.Scheme + "://" + u.Host
-		if origin == ui.URL || u.Scheme == "about" {
+		if origin == uiServer.URL || u.Scheme == "about" {
 			return
 		}
 		e.PreventDefault()
@@ -121,10 +124,11 @@ func openMain() {
 		log.Println("page process gone:", reason)
 		page.Reload()
 	})
-	win.OnClosed(func() { main_ = nil; refreshTray() })
-	// the tray's Show/Hide entry says what the window is doing
-	win.OnShow(refreshTray)
-	win.OnHide(refreshTray)
+	win.OnClosed(func() { main_ = nil; disarmIdleTeardown(); refreshTray() })
+	// the tray's Show/Hide entry says what the window is doing; while hidden, a long idle gives the WebView back
+	// to the OS (see memory.go) rather than paying for it for as long as the app sits in the tray
+	win.OnShow(func() { disarmIdleTeardown(); refreshTray() })
+	win.OnHide(func() { armIdleTeardown(); refreshTray() })
 	// Closing the window hides it: the app keeps running in the tray (its server keeps serving the gateway).
 	// Quitting — the tray, the menu, Ctrl+Q — closes it for real, because `quitting` is set first.
 	win.OnClose(func(e *mygo.CloseEvent) {
@@ -137,7 +141,7 @@ func openMain() {
 
 func showMain() {
 	if main_ == nil {
-		openMain()
+		ensureMain() // opens it at once if the backend is ready, else the native wait does until it is
 		return
 	}
 	main_.Restore()

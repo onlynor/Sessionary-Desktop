@@ -110,3 +110,44 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Copyright © 2022–2023 The Ebitengine Authors. Licensed under the Apache License, Version 2.0 — the same license as
 this project; see [LICENSE](LICENSE) for the full text. purego ships no `NOTICE` file of its own, so none is
 reproduced here beyond this copyright attribution.
+
+### golang.org/x/image (BSD-3-Clause)
+
+Pulled in by `github.com/egoist/mygo/ui` (native UI, used for the startup window — see
+[docs/DESKTOP_RUNTIME.md](docs/DESKTOP_RUNTIME.md)) for image decoding. Same license text as `golang.org/x/text`
+above; copyright 2009 The Go Authors.
+
+### golang.org/x/sys (BSD-3-Clause)
+
+Used on Windows only (`internal/shellenv`) to read the Machine and User `Path` registry values directly, the way a
+freshly opened terminal would, rather than trusting the launching process's own (possibly stale) environment block.
+Same license text as `golang.org/x/text` above; copyright 2009 The Go Authors.
+
+### github.com/go-text/typesetting (BSD-3-Clause, or Unlicense)
+
+Also pulled in by `github.com/egoist/mygo/ui`, for text shaping. Dual-licensed; this project relies on it under the
+BSD-3-Clause option:
+
+```
+Copyright 2021 The go-text authors
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the
+   following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the
+   following disclaimer in the documentation and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote
+   products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```

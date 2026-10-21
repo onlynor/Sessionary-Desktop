@@ -28,7 +28,10 @@ func backendOptions() backend.Options {
 		NodeCandidates: runtimeCandidates(),
 		SystemNode:     dev || os.Getenv("SESSIONARY_SYSTEM_NODE") == "1",
 		Scripts:        serverScripts(),
-		OnChange:       func(s backend.Status) { BackendChanged.Broadcast(s) },
+		OnChange: func(s backend.Status) {
+			BackendChanged.Broadcast(s)
+			ensureMain() // opens the real window once this reaches PhaseReady; a native wait otherwise (launch.go)
+		},
 		// the server and every agent it starts inherit the user's shell PATH, not the launcher's (see shellenv)
 		ResolveEnv: func() []string { return []string{"PATH=" + shellenv.ResolvePath(os.Getenv("PATH"))} },
 	}

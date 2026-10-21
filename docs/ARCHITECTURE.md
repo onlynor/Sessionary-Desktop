@@ -71,7 +71,10 @@ React and every package resolve from Sessionary's own install, so there is one c
   replaces the frame (flush source list, 52px title bar on both sides of the window, toolbar that takes a material
   only when content scrolls under it, large titles on the reading column) and quiets surfaces (figures as one strip,
   no cards within cards, sentence-case headings, row actions on hover). Native UI (MyGo's `ui` package) is kept for
-  places with a real advantage — none yet justified it over the existing web surfaces.
+  places with a real advantage: the startup window (see
+  [Memory: native startup, idle teardown](DESKTOP_RUNTIME.md#memory-native-startup-idle-teardown)) is the one case
+  found so far where loading the WebView itself is the thing worth avoiding; nothing else has justified it over the
+  existing web surfaces.
 - **Fonts on Linux.** WebKitGTK takes fontconfig's substitute for unknown families, so `-apple-system` silently became
   Noto Sans CJK. On Linux the stack starts with the bundled Inter, then the CJK face for the UI language.
 - **Blur.** MyGo disables WebKitGTK's DMA-BUF renderer for safety, which also disables `backdrop-filter`. Rather than
